@@ -27,11 +27,50 @@ LOG_FILE = os.path.join(BASE_DIR, 'sync_log.txt')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 FACH_MAP = {
-    'GEE': 'Geschichte Englisch', 'PXE': 'Projektkurs', 'BI': 'Biologie',
-    'CH': 'Chemie', 'GE': 'Geschichte LK', 'IF': 'Informatik',
-    'K0': 'Japanisch', 'KR': 'Katholische Religion', 'KU': 'Kunst',
-    'PH': 'Physik', 'PL': 'Praktische Philosophie', 'SP': 'Sport',
-    'VO': 'Vokalpraxis', 'E': 'Englisch LK', 'D': 'Deutsch', 'M': 'Mathematik',
+    # LKs
+    'BI-LK': 'Biologie LK',
+    'CH-LK': 'Chemie LK',
+    'EK-LK': 'Erdkunde LK',
+    'GE-LK': 'Geschichte LK',
+    'KU-LK': 'Kunst LK',
+    'PA-LK': 'Pädagogik LK',
+    'PH-LK': 'Physik LK',
+    'SP-LK': 'Sport LK',
+    'SW-LK': 'Sozialwissenschaften LK',
+
+    # LKs kurze Kürzel
+    'D-LK': 'Deutsch LK',
+    'E-LK': 'Englisch LK',
+    'S-LK': 'Spanisch LK',
+
+    # Lange Kürzel
+    'EKE': 'Erkunde Englisch',
+    'GEE': 'Geschichte Englisch',
+    'PJK': 'Projektkurs',
+
+    # Grundkurse
+    'BI': 'Biologie',
+    'CH': 'Chemie',
+    'ER': 'Evangelische Religion',
+    'IF': 'Informatik',
+    'K0': 'Japanisch',
+    'KR': 'Katholische Religion',
+    'KU': 'Kunst',
+    'MU': 'Musik',
+    'PH': 'Physik',
+    'PL': 'Praktische Philosophie',
+    'SP': 'Sport',
+    'SW': 'Sozialwissenschaften',
+    'VO': 'Vokalpraxis',
+
+    # Grundkurse einzelne Kürzel
+    'D': 'Deutsch',
+    'F': 'Französisch',
+    'M': 'Mathematik',
+    'S': 'Spanisch',
+
+    # '': '', '': '', '': '',
+    # '': '', '': '', '': '',
 }
 
 logging.basicConfig(
@@ -392,6 +431,7 @@ def sync():
 
         save_hashes(new_hashes)
         notifications.send_update_notification(c_new, c_upd, c_skip, len(local_hashes), change_details)
+        logging.info(f"Fertig! Neu: {c_new}, Updates: {c_upd}, Unverändert: {c_skip}, Gelöscht: {len(local_hashes)}")
         log_separator()
 
     except Exception as e:
