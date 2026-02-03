@@ -17,7 +17,7 @@ playwright install chromium
 ## 3. Configuration for your WebUntis account
 #### 1. WebUntis Login: Create a ```login.py``` file and fill it out (See login_example.py as example).
 
-#### 4. Create a google project to access its API
+## 4. Create a google project to access its API
 #### 1. Go to https://console.cloud.google.com/ and create a new Project. Select it.
 #### 2. Search at the top for ```Google Calendar API```. Activate it.
 #### 3. Go to the ```OAuth consent screen```. Follow the ```First Steps``` there. Choose your Project name, set the mark on external, choose an E-Mail for contacts and accept.
@@ -26,7 +26,7 @@ playwright install chromium
 #### 6. Now after 7 days the test phase of your project should be expired. To prevent this publish it now: Go to the ```OAuth consent screen``` and publish the app/project there. If you are being asked to check your project, select no.
 #### 7. The script is now read to run. (Maybe run your program again to create a new ```toke.json``` after you set the project to public).
 
-## 4. For automation
+## 5. For automation
 I use Cron on Ubuntu to run it every few minutes:
 
 ```bash 
