@@ -17,7 +17,7 @@ playwright install chromium
 ## 3. Configuration for your WebUntis account
 #### 1. WebUntis Login: Create a ```login.py``` file and fill it out (See login_example.py as example).
 
-### 4. Create a google project to access its API
+#### 4. Create a google project to access its API
 #### 1. Go to https://console.cloud.google.com/ and create a new Project. Select it.
 #### 2. Search at the top for ```Google Calendar API```. Activate it.
 #### 3. Go to the ```OAuth consent screen```. Follow the ```First Steps``` there. Choose your Project name, set the mark on external, choose an E-Mail for contacts and accept.
