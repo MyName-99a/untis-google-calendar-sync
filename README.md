@@ -1,12 +1,12 @@
 # untis-google-calendar-sync
 A short program, that takes your WebUntis timetable into your google calender.
 
-### 1. Clone repository
+## 1. Clone repository
 ```bash
 git clone https://github.com/MyName-99a/untis-google-calendar-sync.git
 ```
 
-### 2. Install dependencies and chromium
+## 2. Install dependencies and chromium
 First install the requirements and then use the command to install chromium
 ```bash
 pip install -r requirements.txt
@@ -14,7 +14,7 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 3. Configuration for your WebUntis account
+## 3. Configuration for your WebUntis account
 #### 1. WebUntis Login: Create a ```login.py``` file and fill it out (See login_example.py as example).
 
 ### 4. Create a google project to access its API
@@ -26,7 +26,7 @@ playwright install chromium
 #### 6. Now after 7 days the test phase of your project should be expired. To prevent this publish it now: Go to the ```OAuth consent screen``` and publish the app/project there. If you are being asked to check your project, select no.
 #### 7. The script is now read to run. (Maybe run your program again to create a new ```toke.json``` after you set the project to public).
 
-### 4. For automation
+## 4. For automation
 I use Cron on Ubuntu to run it every few minutes:
 
 ```bash 
@@ -34,5 +34,5 @@ I use Cron on Ubuntu to run it every few minutes:
 */4 6-19 * * * /path/to/your/venv/bin/python3 /path/to/main3.0.py
 ```
 
-### Info
+## Info
 When you dont see the publish button. Wait till the 7 days run out and the program runs into a error. Then it should pop-up.
