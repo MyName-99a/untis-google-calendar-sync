@@ -286,6 +286,16 @@ def sync():
                 u_id = lesson['ids'][0] if lesson['ids'] else None
                 if not u_id: continue
 
+                details = lesson.get('details', {})
+
+                # check ausfall
+                sub_text = ""
+                for val in details.values():
+                    if val and "eigenverantwortliches arbeiten" in str(val).lower():
+                        sub_text = str(val)
+                        break
+                is_ausfall = (lesson.get('status') == 'CANCELLED') or (sub_text != "")
+
                 # formatieren der zeit
                 start_iso = format_untis_time(untis_date, lesson['start'])
                 end_iso = format_untis_time(untis_date, lesson['end'])
@@ -304,7 +314,11 @@ def sync():
                 teacher_parts = []
                 for t in current_teachers:
                     if t and t.strip() != "---":
-                        teacher_parts.append(t)
+                        # Hoffelntlich error behoben: Wenn Ausfall, dann auch current_teacher streichen. Wurde nicht geamcht vorher. Trotz ausfall wurde der lehrer nicht durchgestrichen.
+                        if is_ausfall:
+                            teacher_parts.append(strike(t))
+                        else:
+                            teacher_parts.append(t)
                 for t in removed_teachers:
                     if t and t.strip() != "---":
                         striked_t = strike(t)
@@ -318,7 +332,11 @@ def sync():
                 room_parts = []
                 for r in current_rooms:
                     if r and r.strip() != "---":
-                        room_parts.append(r)
+                        # Hier das gleiche wie mit den lehrern oben
+                        if is_ausfall:
+                            room_parts.append(strike(r))
+                        else:
+                            room_parts.append(r)
                 for r in removed_rooms:
                     if r and r.strip() != "---":
                         striked_r = strike(r)
@@ -343,15 +361,6 @@ def sync():
                     room = f"{room_base}{separator}{separator.join(indicators)}"
                 else:
                     room = room_base
-
-                # check ausfall
-                sub_text = ""
-                for val in details.values():
-                    if val and "eigenverantwortliches arbeiten" in str(val).lower():
-                        sub_text = str(val)
-                        break
-
-                is_ausfall = (lesson.get('status') == 'CANCELLED') or (sub_text != "")
 
                 # titel machen für ausfall
                 titel = format_title(lesson)
