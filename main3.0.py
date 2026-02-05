@@ -207,7 +207,7 @@ def build_description(lesson, homeworks, teacher_list_formatted):
     detail_lines = []
     for k, v in details.items():
         if v and str(v).strip() and str(v).strip() != "---":
-            detail_lines.append(f"{k.capitalize()}: {v}")
+            detail_lines.append(f"{k.capitalize()}: {v}\n")
 
     if detail_lines:
         lines.append("-------- DETAILS -------")
@@ -418,7 +418,7 @@ def sync():
                 # Historie bewahren, nicht löschen
                 try:
                     event = service.events().get(calendarId='primary', eventId=g_id).execute()
-                    new_desc = event.get('description', '').split('\n\nUntis-Sync-ID:')[0] + "\nStunde vergangen"
+                    new_desc = event.get('description', '').split('\n\nUntis-Sync-ID:')[0] + "\n\nStunde vergangen"
                     service.events().patch(calendarId='primary', eventId=g_id, body={'description': new_desc}).execute()
                 except:
                     pass
