@@ -35,5 +35,8 @@ I use Cron on Ubuntu to run it every few minutes:
 ```
 
 ## Info
-When you dont see the publish button. Wait till the 7 days run out and the program runs into a error. Then it should pop-up.
-Maybe you need to update the 'FACH_MAP' to get the real name of the subjects at your school. Maybe update or extend the 'positions' if your school uses more than 3.
+- When you dont see the publish button. Wait till the 7 days run out and the program runs into a error. Then it should pop-up.
+
+- Maybe you need to update the 'FACH_MAP' to get the real name of the subjects at your school. Maybe update or extend the 'positions' if your school uses more than 3.
+
+- The Program needs roughly 3½ minutes to check every lesson in 12 weeks time for changes.
