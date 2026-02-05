@@ -1,0 +1,80 @@
+2026-02-05 21:09:52,015 - INFO - "GET /?state=uivH0RCnDQhp8KdysG3ewyuF0JPQdb&code=4/0ASc3gC2p0R9gEv6-UTSqa1hh5y4UBUuTFgaQ-S4DUS-A3SPyzsQ-jpQhV1q3wPx4fox7Kw&scope=https://www.googleapis.com/auth/calendar HTTP/1.1" 200 65
+2026-02-05 21:09:52,127 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-02-05 21:09:52,128 - INFO - Hole Daten für 2026-02-05 bis 2026-04-30
+2026-02-05 21:09:52,409 - INFO - Prüfe Termin: Deutsch am 2026-02-05T07:50:00
+2026-02-05 21:09:52,577 - WARNING - Encountered 403 Forbidden with reason "accessNotConfigured"
+2026-02-05 21:09:52,577 - ERROR - Fehler im Sync: <HttpError 403 when requesting https://www.googleapis.com/calendar/v3/calendars/primary/events?alt=json returned "Google Calendar API has not been used in project 838329121224 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=838329121224 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.". Details: "[{'message': 'Google Calendar API has not been used in project 838329121224 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=838329121224 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.', 'domain': 'usageLimits', 'reason': 'accessNotConfigured', 'extendedHelp': 'https://console.developers.google.com'}]">
+Traceback (most recent call last):
+  File "/home/jw/shared/untis-google-calendar-sync/main3.0.py", line 415, in sync
+    created = service.events().insert(calendarId='primary', body=event_body).execute()
+  File "/home/jw/shared/untis-google-calendar-sync/.venv/lib/python3.13/site-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+    return wrapped(*args, **kwargs)
+  File "/home/jw/shared/untis-google-calendar-sync/.venv/lib/python3.13/site-packages/googleapiclient/http.py", line 938, in execute
+    raise HttpError(resp, content, uri=self.uri)
+googleapiclient.errors.HttpError: <HttpError 403 when requesting https://www.googleapis.com/calendar/v3/calendars/primary/events?alt=json returned "Google Calendar API has not been used in project 838329121224 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=838329121224 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.". Details: "[{'message': 'Google Calendar API has not been used in project 838329121224 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=838329121224 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.', 'domain': 'usageLimits', 'reason': 'accessNotConfigured', 'extendedHelp': 'https://console.developers.google.com'}]">
+2026-02-05 21:09:52,885 - INFO - Ende des Syncs!
+
+--------------------------------------------------
+
+2026-02-05 21:11:27,404 - INFO - file_cache is only supported with oauth2client<4.0.0
+2026-02-05 21:11:27,404 - INFO - Hole Daten für 2026-02-05 bis 2026-04-30
+2026-02-05 21:11:27,699 - INFO - Prüfe Termin: Deutsch am 2026-02-05T07:50:00
+2026-02-05 21:11:28,525 - INFO - Prüfe Termin: E% am 2026-02-05T09:40:00
+2026-02-05 21:11:29,234 - INFO - Prüfe Termin: AUSFALL: Mathematik (M%) am 2026-02-05T09:40:00
+2026-02-05 21:11:29,964 - INFO - Prüfe Termin: Mathematik am 2026-02-05T10:25:00
+2026-02-05 21:11:30,685 - INFO - Prüfe Termin: AUSFALL: Mathematik (M%) am 2026-02-05T10:25:00
+2026-02-05 21:11:31,363 - INFO - Prüfe Termin: AUSFALL: E% am 2026-02-05T10:25:00
+2026-02-05 21:11:32,202 - INFO - Prüfe Termin: GEO am 2026-02-05T11:20:00
+2026-02-05 21:11:32,946 - INFO - Prüfe Termin: Musik am 2026-02-05T14:00:00
+2026-02-05 21:11:33,677 - INFO - Prüfe Termin: Sport (SPO-M) am 2026-02-06T07:50:00
+2026-02-05 21:11:34,407 - INFO - Prüfe Termin: L am 2026-02-06T09:40:00
+2026-02-05 21:11:35,125 - INFO - Prüfe Termin: AUSFALL: I am 2026-02-06T11:20:00
+2026-02-05 21:11:35,849 - INFO - Prüfe Termin: AUSFALL: Mathematik am 2026-02-09T07:50:00
+2026-02-05 21:11:36,522 - INFO - Prüfe Termin: AUSFALL: E am 2026-02-09T09:40:00
+2026-02-05 21:11:37,325 - INFO - Prüfe Termin: AUSFALL: Chemie am 2026-02-09T11:20:00
+2026-02-05 21:11:38,031 - INFO - Prüfe Termin: AUSFALL: GK am 2026-02-10T07:50:00
+2026-02-05 21:11:38,809 - INFO - Prüfe Termin: AUSFALL: WBS am 2026-02-10T08:35:00
+2026-02-05 21:11:39,535 - INFO - Prüfe Termin: AUSFALL: Deutsch am 2026-02-10T09:40:00
+2026-02-05 21:11:40,288 - INFO - Prüfe Termin: AUSFALL: L am 2026-02-10T11:20:00
+2026-02-05 21:11:40,966 - INFO - Prüfe Termin: AUSFALL: Mathematik am 2026-02-10T12:05:00
+2026-02-05 21:11:41,638 - INFO - Prüfe Termin: AUSFALL: Biologie am 2026-02-10T14:00:00
+2026-02-05 21:11:42,294 - INFO - Prüfe Termin: AUSFALL: Physik am 2026-02-10T15:40:00
+2026-02-05 21:11:42,999 - INFO - Prüfe Termin: AUSFALL: Mathematik am 2026-02-11T07:50:00
+2026-02-05 21:11:43,781 - INFO - Prüfe Termin: AUSFALL: REV am 2026-02-11T09:40:00
+2026-02-05 21:11:44,547 - INFO - Prüfe Termin: AUSFALL: G am 2026-02-11T11:20:00
+2026-02-05 21:11:45,194 - INFO - Prüfe Termin: AUSFALL: Deutsch am 2026-02-12T07:50:00
+2026-02-05 21:11:45,895 - INFO - Prüfe Termin: AUSFALL: Mathematik (M%) am 2026-02-12T09:40:00
+2026-02-05 21:11:46,601 - INFO - Prüfe Termin: AUSFALL: E% am 2026-02-12T09:40:00
+2026-02-05 21:11:47,265 - INFO - Prüfe Termin: AUSFALL: GEO am 2026-02-12T11:20:00
+2026-02-05 21:11:48,016 - INFO - Prüfe Termin: AUSFALL: Musik am 2026-02-12T14:00:00
+2026-02-05 21:11:48,742 - INFO - Prüfe Termin: AUSFALL: Sport (SPO-M) am 2026-02-13T07:50:00
+2026-02-05 21:11:49,430 - INFO - Prüfe Termin: AUSFALL: L am 2026-02-13T09:40:00
+2026-02-05 21:11:50,103 - INFO - Prüfe Termin: AUSFALL: I am 2026-02-13T11:20:00
+2026-02-05 21:11:50,790 - INFO - Prüfe Termin: Mathematik am 2026-02-23T07:50:00
+2026-02-05 21:11:51,654 - INFO - Prüfe Termin: E am 2026-02-23T09:40:00
+2026-02-05 21:11:52,332 - INFO - Prüfe Termin: Chemie am 2026-02-23T11:20:00
+2026-02-05 21:11:53,124 - INFO - Prüfe Termin: GK am 2026-02-24T07:50:00
+2026-02-05 21:11:53,759 - INFO - Prüfe Termin: WBS am 2026-02-24T08:35:00
+2026-02-05 21:11:54,408 - INFO - Prüfe Termin: Deutsch am 2026-02-24T09:40:00
+2026-02-05 21:11:55,115 - INFO - Prüfe Termin: L am 2026-02-24T11:20:00
+2026-02-05 21:11:55,795 - INFO - Prüfe Termin: Mathematik am 2026-02-24T12:05:00
+2026-02-05 21:11:56,455 - INFO - Prüfe Termin: E am 2026-02-24T14:00:00
+2026-02-05 21:11:57,160 - INFO - Prüfe Termin: Physik am 2026-02-24T15:40:00
+2026-02-05 21:11:57,839 - INFO - Prüfe Termin: Physik am 2026-02-24T16:25:00
+2026-02-05 21:11:58,544 - INFO - Prüfe Termin: Mathematik am 2026-02-25T07:50:00
+2026-02-05 21:11:59,344 - INFO - Prüfe Termin: REV am 2026-02-25T09:40:00
+2026-02-05 21:11:59,987 - INFO - Prüfe Termin: G am 2026-02-25T11:20:00
+2026-02-05 21:12:00,686 - INFO - Prüfe Termin: Deutsch am 2026-02-26T07:50:00
+2026-02-05 21:12:01,452 - INFO - Prüfe Termin: Mathematik (M%) am 2026-02-26T09:40:00
+2026-02-05 21:12:02,105 - INFO - Prüfe Termin: E% am 2026-02-26T09:40:00
+2026-02-05 21:12:02,864 - INFO - Prüfe Termin: G am 2026-02-26T11:20:00
+2026-02-05 21:12:03,518 - INFO - Prüfe Termin: AUSFALL: GEO am 2026-02-26T11:20:00
+2026-02-05 21:12:04,211 - INFO - Prüfe Termin: Musik am 2026-02-26T14:00:00
+2026-02-05 21:12:04,874 - INFO - Prüfe Termin: Sport (SPO-M) am 2026-02-27T07:50:00
+2026-02-05 21:12:05,542 - INFO - Prüfe Termin: L am 2026-02-27T09:40:00
+2026-02-05 21:12:06,251 - INFO - Prüfe Termin: I am 2026-02-27T11:20:00
+2026-02-05 21:12:07,488 - INFO - Fertig! Neu: 55, Updates: 0, Unverändert: 0, Gelöscht: 0
+2026-02-05 21:12:07,488 - INFO - Ende des Syncs!
+
+--------------------------------------------------
+
