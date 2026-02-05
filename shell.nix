@@ -49,6 +49,6 @@ pkgs.mkShell {
       source .venv/bin/activate
     fi
     
-    echo "Removed the problematic libXshm reference. Ready to try again!"
+    echo "Ready to go!"
   '';
 }
