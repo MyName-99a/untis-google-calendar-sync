@@ -62,13 +62,20 @@ FACH_MAP = {
     'SP': 'Sport',
     'SW': 'Sozialwissenschaften',
     'VO': 'Vokalpraxis',
-
+    'GK': 'Gemeinschaftskunde',
+    'REV': 'Evangelische Religion',
     # Grundkurse einzelne Kürzel
     'D': 'Deutsch',
     'F': 'Französisch',
     'M': 'Mathematik',
     'S': 'Spanisch',
+    'G': 'Geschichte',
+    'L': 'Latein',
+    'E'; 'Englisch'
 
+
+
+ 
     # '': '', '': '', '': '',
     # '': '', '': '', '': '',
 }
