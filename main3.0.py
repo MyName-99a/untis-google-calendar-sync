@@ -46,7 +46,9 @@ FACH_MAP = {
     # Lange Kürzel
     'EKE': 'Erkunde Englisch',
     'GEE': 'Geschichte Englisch',
-    'PJK': 'Projektkurs',
+
+    # Projektkurs
+    'PX': 'Projektkurs',
 
     # Grundkurse
     'BI': 'Biologie',
@@ -64,6 +66,7 @@ FACH_MAP = {
     'VO': 'Vokalpraxis',
     'GK': 'Gemeinschaftskunde',
     'REV': 'Evangelische Religion',
+
     # Grundkurse einzelne Kürzel
     'D': 'Deutsch',
     'F': 'Französisch',
@@ -71,7 +74,7 @@ FACH_MAP = {
     'S': 'Spanisch',
     'G': 'Geschichte',
     'L': 'Latein',
-    'E'; 'Englisch'
+    'E': 'Englisch'
 
 
 
@@ -214,11 +217,11 @@ def build_description(lesson, homeworks, teacher_list_formatted):
     detail_lines = []
     for k, v in details.items():
         if v and str(v).strip() and str(v).strip() != "---":
-            detail_lines.append(f"{k.capitalize()}: {v}\n")
+            detail_lines.append(f"{k.capitalize()}: {v}")
 
     if detail_lines:
         lines.append("-------- DETAILS -------")
-        lines.extend(detail_lines)
+        lines.append("\n\n".join(detail_lines))
         lines.append("------------------------")
         lines.append("")
 
