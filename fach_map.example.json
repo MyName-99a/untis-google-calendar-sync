@@ -1,6 +1,6 @@
 {
-  "_hinweis": "Schlüssel = Kürzel aus WebUntis (Anfang des Kürzels genügt), Wert = Anzeigename. Eigene Einträge haben Vorrang.",
-  "M": "Mathe",
-  "E-LK": "Englisch Leistungskurs",
+  "_note": "Key = code from WebUntis (the beginning of the code is enough), value = display name. Your own entries win over the built-in table.",
+  "M": "Maths",
+  "E-LK": "English advanced course",
   "SP": "Sport"
 }

@@ -1,5 +1,8 @@
+import logging
+
 import config
 import requests
+import texts
 from pprint import pprint
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
@@ -59,8 +62,8 @@ def get_cookies_and_bearer_token():
             sleek_session1, sleek_product1, bearer_token1
         )
 schoolname, tenant_id, traceid, jsessionid, sleek_session, sleek_product, bearer_token = get_cookies_and_bearer_token()
-# Ohne "", weil man die bei den api dingern unten ohne benutzt in den 'headers'
-# (vorher stand hier tenant_id[0], das war nur das erste Zeichen und damit immer leer)
+# Without the quotes, because the 'headers' below need the value without them
+# (this used to be tenant_id[0], which was only the first character and therefore always empty)
 tenant_id_splited = tenant_id.replace('"', '') if tenant_id else ""
 
 #
@@ -179,7 +182,7 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
     params = {
         'start': f'{start_date_of_week_iso}',
         'end': f'{end_date_of_week_iso}',
-        'format': '1', # kp was 1 heißt
+        'format': '1',  # no idea what 1 means
         'resourceType': 'STUDENT',
         'resources': f'{student_id}',
         'periodTypes': '',
@@ -195,9 +198,9 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
     )
 
     week_entries = []
-    # 1. definierung von hilfsfunktion, um die posititonen zu ermiteln. (sind werte, die sich ändern können. also könnte alles drinstehen vom type her)
+    # 1. helper function to find the positions (the values can change, so the type could be anything)
     def process_positions(lesson_data, current_lesson_dict):
-        # es gibt mehr als drei aber beim lfg werden meist nur 3 benutzt. es gibt 1 - 7
+        # there are more than three, but only 3 are usually used. there are 1 - 7
         for p_key in ['position1', 'position2', 'position3']:
             pos_list = lesson_data.get(p_key)
             if not pos_list:
@@ -207,7 +210,7 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
                 curr = entry.get('current')
                 rem = entry.get('removed')
 
-                # typ bestimmen der position
+                # determine the type of the position
                 detected_type = None
                 if curr:
                     detected_type = curr.get('type')
@@ -220,7 +223,7 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
                 if detected_type not in current_lesson_dict:
                     current_lesson_dict[detected_type] = []
 
-                # für gelöschte einträge "removed"
+                # for removed entries ("removed")
                 rem_key = f"REMOVED_{detected_type}"
                 if rem_key not in current_lesson_dict:
                     current_lesson_dict[rem_key] = []
@@ -231,7 +234,7 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
                 if rem and rem.get('displayName'):
                     current_lesson_dict[rem_key].append(rem.get('displayName'))
 
-    # 2. in ein dic alles zusammenführen
+    # 2. merge everything into one dict
     for day in response.json().get('days', []):
         day_data = {"date": day.get('date'), "lessons": []}
 
@@ -265,11 +268,11 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
 
 def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
     """
-    Holt die Detailansicht einer Stunde (ein Request) und gibt zurück:
+    Fetches the detail view of a lesson (one request) and returns:
     {
         "homeworks": [(text, dateTime, dueDateTime), ...],
-        "teaching_content": str oder None,
-        "exam": {"name": ..., "description": ..., "type_long_name": ...} oder None
+        "teaching_content": str or None,
+        "exam": {"name": ..., "description": ..., "type_long_name": ...} or None
     }
     """
     cookies = {
@@ -286,7 +289,7 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
         'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
         'authorization': f'{bearer_token}',
         'priority': 'u=1, i',
-        'referer': f'https://{base_url}/timetable/my-student/lessonDetails/{id_der_stunde}/{student_id}/5/{start_zeit_in_iso}/{end_zeit_in_iso}/true?date={current_week_monday}&entityId={student_id}', # /5/ steht für schüler
+        'referer': f'https://{base_url}/timetable/my-student/lessonDetails/{id_der_stunde}/{student_id}/5/{start_zeit_in_iso}/{end_zeit_in_iso}/true?date={current_week_monday}&entityId={student_id}',  # /5/ stands for student
         'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
@@ -300,7 +303,7 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
 
     params = {
         'elementId': f'{student_id}',
-        'elementType': '5', # Hier steht 5 auch wieder für Schüler?
+        'elementType': '5',  # 5 stands for student here as well?
         'endDateTime': f'{end_zeit_in_iso}',
         'homeworkOption': 'DUE',
         'startDateTime': f'{start_zeit_in_iso}',
@@ -317,28 +320,28 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
 
     try:
         data = response.json()
-        # Sicherstellen, dass calendarEntries existiert und nicht leer ist
+        # make sure calendarEntries exists and is not empty
         entries = data.get('calendarEntries', [])
 
         if entries and len(entries) > 0:
             entry = entries[0]
 
-            # 1. Hausaufgaben (kann None sein, wenn keine HA da sind)
+            # 1. homework (can be None if there is none)
             homeworks_list = entry.get('homeworks')
             if homeworks_list:
                 for hw in homeworks_list:
-                    text_from_hw = hw.get('text', 'Kein Text vorhanden')
+                    text_from_hw = hw.get('text', texts.t('no_homework_text'))
                     date_time_from_hw = hw.get('dateTime')
                     due_date_time_from_hw = hw.get('dueDateTime')
 
                     result["homeworks"].append((text_from_hw, date_time_from_hw, due_date_time_from_hw))
 
-            # 2. Lehrstoff (teachingContent), leer oder fehlend -> None
+            # 2. teaching content (teachingContent), empty or missing -> None
             teaching_content = entry.get('teachingContent')
             if teaching_content and str(teaching_content).strip():
                 result["teaching_content"] = str(teaching_content).strip()
 
-            # 3. Exam (kann None sein oder fehlen)
+            # 3. exam (can be None or missing)
             exam = entry.get('exam')
             if exam:
                 exam_data = {
@@ -346,13 +349,13 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
                     "description": exam.get('description'),
                     "type_long_name": exam.get('typeLongName'),
                 }
-                # nur übernehmen, wenn wirklich irgendein Text drinsteht
+                # only keep it if there is really some text in it
                 if any(v and str(v).strip() for v in exam_data.values()):
                     result["exam"] = exam_data
 
     except Exception as e:
-        # Falls das JSON-Parsing fehlschlägt oder die Struktur völlig anders ist
-        print(f"Fehler beim Parsen der Detaildaten für ID {id_der_stunde}: {e}")
+        # in case the JSON parsing fails or the structure is completely different
+        logging.error(f"Error parsing the detail data for ID {id_der_stunde}: {e}")
         return {"homeworks": [], "teaching_content": None, "exam": None}
 
     return result

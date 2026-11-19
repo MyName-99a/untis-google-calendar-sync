@@ -1,15 +1,15 @@
 """
-Google-Anmeldung für den Kalender (Device-Flow, es wird kein Browser auf dem Server gebraucht).
+Google login for the calendar (device flow, no browser is needed on the server).
 
-Einmalig ausführen:
+Run once:
     python auth.py            (Docker: docker compose run --rm untis-sync python auth.py)
-    python auth.py --force    (eine vorhandene token.json ersetzen)
+    python auth.py --force    (replace an existing token.json)
 
-Das Programm zeigt einen Code an. Den gibst du auf https://www.google.com/device an einem beliebigen
-Gerät ein (Handy, PC), meldest dich mit deinem Google-Konto an und bestätigst. Danach liegt token.json
-im Datenordner. Es erneuert sich ab dann automatisch.
+The program shows a code. Enter it at https://www.google.com/device on any device (phone, PC),
+sign in with your Google account and confirm. Afterwards token.json is in the data folder.
+It renews itself automatically from then on.
 
-Der restliche Code nutzt nur get_credentials() und GoogleAuthError.
+The rest of the code only uses get_credentials() and GoogleAuthError.
 """
 
 import os
@@ -32,15 +32,15 @@ TOKEN_PATH = os.path.join(config.DATA_DIR, 'token.json')
 
 
 class GoogleAuthError(Exception):
-    """Die Anmeldung fehlt oder ist ungültig. Dann muss auth.py (erneut) ausgeführt werden."""
+    """The login is missing or invalid. auth.py has to be run (again)."""
 
 
 # ----------------------------------------------------------------------------------------------------
-# Für den Sync: gültige Zugangsdaten holen und bei Bedarf automatisch erneuern
+# For the sync: get valid credentials and renew them automatically when needed
 # ----------------------------------------------------------------------------------------------------
 
 def _save_token(creds):
-    # erst in eine temporäre Datei schreiben, dann ersetzen (verhindert eine kaputte token.json)
+    # write to a temporary file first, then replace (prevents a broken token.json)
     tmp_path = TOKEN_PATH + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
@@ -49,23 +49,23 @@ def _save_token(creds):
 
 def get_credentials():
     if not os.path.exists(TOKEN_PATH):
-        raise GoogleAuthError("token.json fehlt. Einmalig 'python auth.py' ausführen (siehe README).")
+        raise GoogleAuthError("token.json is missing. Run 'python auth.py' once (see README).")
 
     try:
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     except (ValueError, OSError) as e:
-        raise GoogleAuthError(f"token.json ist unbrauchbar ({e}). 'python auth.py --force' ausführen.") from e
+        raise GoogleAuthError(f"token.json is unusable ({e}). Run 'python auth.py --force'.") from e
 
     if not creds.valid:
         if not creds.refresh_token:
-            raise GoogleAuthError("token.json enthält keinen Refresh-Token. 'python auth.py --force' ausführen.")
+            raise GoogleAuthError("token.json contains no refresh token. Run 'python auth.py --force'.")
         try:
             creds.refresh(Request())
         except RefreshError as e:
             if getattr(e, "retryable", False):
-                raise  # vorübergehendes Problem bei Google, das ist kein Fall für eine neue Anmeldung
+                raise  # temporary problem at Google, not a case for a new login
             raise GoogleAuthError(
-                f"Google-Anmeldung abgelaufen oder widerrufen ({e}). 'python auth.py --force' ausführen."
+                f"Google login expired or revoked ({e}). Run 'python auth.py --force'."
             ) from e
         _save_token(creds)
 
@@ -73,7 +73,7 @@ def get_credentials():
 
 
 # ----------------------------------------------------------------------------------------------------
-# Einmalige Anmeldung (Device-Flow)
+# One-time login (device flow)
 # ----------------------------------------------------------------------------------------------------
 
 def _json(response):
@@ -84,17 +84,17 @@ def _json(response):
 
 
 def _check_calendar(creds):
-    # kleiner Test, ob Anmeldung, Kalender-API und CALENDAR_ID zusammenpassen
+    # small test whether login, Calendar API and CALENDAR_ID fit together
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
     try:
-        service = build('calendar', 'v3', credentials=creds)
+        service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
         calendar = service.calendars().get(calendarId=config.CALENDAR_ID).execute()
-        print(f"Verbunden mit Kalender: {calendar.get('summary', config.CALENDAR_ID)}", flush=True)
+        print(f"Connected to calendar: {calendar.get('summary', config.CALENDAR_ID)}", flush=True)
     except HttpError as e:
-        print(f"Die Anmeldung ist gespeichert, aber der Kalender '{config.CALENDAR_ID}' ist nicht erreichbar: {e}")
-        print("→ CALENDAR_ID prüfen (für den Hauptkalender: primary) und ob die Google Calendar API aktiviert ist.")
+        print(f"The login is saved, but the calendar '{config.CALENDAR_ID}' cannot be reached: {e}")
+        print("→ Check CALENDAR_ID (for the main calendar: primary) and whether the Google Calendar API is enabled.")
         sys.exit(1)
 
 
@@ -102,10 +102,10 @@ def run_device_flow(force=False):
     config.require("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
 
     if os.path.exists(TOKEN_PATH) and not force:
-        print(f"{TOKEN_PATH} existiert bereits. Mit 'python auth.py --force' wird sie ersetzt.")
+        print(f"{TOKEN_PATH} already exists. Use 'python auth.py --force' to replace it.")
         sys.exit(1)
 
-    # 1. Code anfordern
+    # 1. request a code
     response = requests.post(
         DEVICE_CODE_URL,
         data={"client_id": config.GOOGLE_CLIENT_ID, "scope": " ".join(SCOPES)},
@@ -113,26 +113,26 @@ def run_device_flow(force=False):
     )
     data = _json(response)
     if response.status_code != 200 or "device_code" not in data:
-        error = data.get("error", "unbekannt")
-        print(f"Google hat die Anfrage abgelehnt: {error} {data.get('error_description', '')}")
+        error = data.get("error", "unknown")
+        print(f"Google rejected the request: {error} {data.get('error_description', '')}")
         if error == "invalid_client":
-            print("→ Client-ID prüfen. Der Client muss vom Typ 'TVs und Geräte mit eingeschränkter Eingabe' sein.")
+            print("→ Check the client ID. The client must be of type 'TVs and Limited Input devices'.")
         elif error == "invalid_scope":
-            print("→ Google erlaubt den Kalender-Zugriff in diesem Verfahren nicht (bitte melde das dem Entwickler).")
+            print("→ Google does not allow calendar access with this flow (please report this to the developer).")
         sys.exit(1)
 
     url = data.get("verification_url") or data.get("verification_uri") or "https://www.google.com/device"
     print("", flush=True)
-    print("1. Öffne auf einem beliebigen Gerät (Handy oder PC):", flush=True)
+    print("1. On any device (phone or PC) open:", flush=True)
     print(f"     {url}", flush=True)
-    print("2. Gib diesen Code ein:", flush=True)
+    print("2. Enter this code:", flush=True)
     print(f"     {data['user_code']}", flush=True)
-    print("3. Melde dich mit dem Google-Konto an, in dem der Kalender liegt, und bestätige den Zugriff.", flush=True)
-    print("   Bei der Warnung 'Google hat diese App nicht überprüft' auf 'Erweitert' und dann 'Weiter' klicken.", flush=True)
-    print("   Das ist bei einem eigenen Projekt normal und gewollt.", flush=True)
-    print("\nWarte auf deine Bestätigung ...", flush=True)
+    print("3. Sign in with the Google account that owns the calendar and confirm the access.", flush=True)
+    print("   At the warning 'Google hasn't verified this app' click 'Advanced' and then 'Continue'.", flush=True)
+    print("   This is normal and expected for your own project.", flush=True)
+    print("\nWaiting for your confirmation ...", flush=True)
 
-    # 2. warten, bis bestätigt wurde
+    # 2. wait until it is confirmed
     interval = int(data.get("interval", 5))
     deadline = time.time() + int(data.get("expires_in", 1800))
     tokens = None
@@ -151,7 +151,7 @@ def run_device_flow(force=False):
                 timeout=15,
             )
         except requests.RequestException as e:
-            print(f"Netzwerkproblem ({e}), versuche es weiter ...", flush=True)
+            print(f"Network problem ({e}), trying again ...", flush=True)
             continue
 
         result = _json(poll)
@@ -166,25 +166,25 @@ def run_device_flow(force=False):
             interval += 5
             continue
         if error == "access_denied":
-            print("Der Zugriff wurde abgelehnt. Starte auth.py neu, falls das ein Versehen war.")
+            print("Access was denied. Start auth.py again if that was a mistake.")
             sys.exit(1)
-        print(f"Fehler bei der Anmeldung: {error} {result.get('error_description', '')}")
+        print(f"Login error: {error} {result.get('error_description', '')}")
         sys.exit(1)
 
     if tokens is None:
-        print("Der Code ist abgelaufen. Starte auth.py neu.")
+        print("The code has expired. Start auth.py again.")
         sys.exit(1)
 
     if SCOPES[0] not in tokens.get("scope", SCOPES[0]):
-        print("Der Kalender-Zugriff wurde nicht erteilt. Starte auth.py neu und lasse alle Häkchen gesetzt.")
+        print("Calendar access was not granted. Start auth.py again and leave all checkboxes ticked.")
         sys.exit(1)
 
     if not tokens.get("refresh_token"):
-        print("Google hat keinen Refresh-Token geliefert. Entziehe dem Projekt unter "
-              "https://myaccount.google.com/permissions den Zugriff und starte auth.py neu.")
+        print("Google did not return a refresh token. Remove the project's access at "
+              "https://myaccount.google.com/permissions and start auth.py again.")
         sys.exit(1)
 
-    # 3. token.json im Format von google-auth speichern
+    # 3. save token.json in the format of google-auth
     expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=int(tokens.get("expires_in", 3600)) - 60)
     creds = Credentials(
         token=tokens["access_token"],
@@ -196,7 +196,7 @@ def run_device_flow(force=False):
         expiry=expiry,
     )
     _save_token(creds)
-    print(f"\nAnmeldung gespeichert: {TOKEN_PATH}", flush=True)
+    print(f"\nLogin saved: {TOKEN_PATH}", flush=True)
     _check_calendar(creds)
 
 

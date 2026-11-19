@@ -1,11 +1,11 @@
 """
-Startet main3.0.py nach Zeitplan (ersetzt Cron) und meldet dem Docker-Healthcheck, ob alles läuft.
+Starts main3.0.py on a schedule (replaces cron) and tells the Docker healthcheck whether everything runs.
 
-    python run_loop.py                 Schleife starten (das ist der Start des Containers)
-    python run_loop.py --plan          zeigt den Zeitplan und die nächsten Läufe, startet nichts
-    python run_loop.py --healthcheck   Exit-Code 0 = gesund, 1 = ungesund (für Docker HEALTHCHECK)
+    python run_loop.py                 start the loop (this is what the container runs)
+    python run_loop.py --plan          shows the schedule and the next runs, starts nothing
+    python run_loop.py --healthcheck   exit code 0 = healthy, 1 = unhealthy (for the Docker HEALTHCHECK)
 
-Einstellungen (siehe config.py): SYNC_INTERVAL_MINUTES, SYNC_WINDOW, SYNC_TIMES, SYNC_DAYS,
+Settings (see config.py): SYNC_INTERVAL_MINUTES, SYNC_WINDOW, SYNC_TIMES, SYNC_DAYS,
 SYNC_RUN_ON_START, SYNC_TIMEOUT_MINUTES, TZ.
 """
 
@@ -22,22 +22,22 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import config
 
-# Test-Hilfe: mit SYNC_SCRIPT=fake_sync.py lässt sich die Schleife prüfen, ohne den Kalender anzufassen
+# Test helper: with SYNC_SCRIPT=fake_sync.py the loop can be tested without touching the calendar
 SYNC_SCRIPT = os.path.join(str(config.BASE_DIR), os.environ.get("SYNC_SCRIPT", "main3.0.py"))
 HEALTH_FILE = os.path.join(config.DATA_DIR, "health.json")
 
-EXIT_HANDLED = 3              # Fehler wurde in main3.0.py bereits per ntfy gemeldet
-MIN_PAUSE_SECONDS = 30        # mindestens so lange Pause zwischen zwei Läufen
-HEALTH_MAX_FAILURES = 3       # so viele Fehlläufe hintereinander = "ungesund"
-HEALTH_GRACE_SECONDS = 300    # Toleranz über den geplanten Zeitpunkt hinaus
-CRASH_NOTICE_AFTER = 3        # so viele Abstürze hintereinander = ntfy-Meldung
+EXIT_HANDLED = 3              # the error was already reported via ntfy in main3.0.py
+MIN_PAUSE_SECONDS = 30        # minimum pause between two runs
+HEALTH_MAX_FAILURES = 3       # this many failed runs in a row = "unhealthy"
+HEALTH_GRACE_SECONDS = 300    # tolerance beyond the planned time
+CRASH_NOTICE_AFTER = 3        # this many crashes in a row = ntfy message
 CRASH_NOTICE_EVERY = 24 * 3600
 
-DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]  # logs are always English
 
 
 # ----------------------------------------------------------------------------------------------------
-# Einstellungen lesen
+# Read settings
 # ----------------------------------------------------------------------------------------------------
 
 def parse_time(text):
@@ -61,7 +61,7 @@ def parse_days(text):
             return days
     except ValueError:
         pass
-    logging.warning(f"SYNC_DAYS={text!r} nicht verständlich (Beispiele: 1-5 oder 1,3,5, 1 = Montag). Es gelten alle Tage.")
+    logging.warning(f"SYNC_DAYS={text!r} not understood (examples: 1-5 or 1,3,5, 1 = Monday). Using all days.")
     return set(range(7))
 
 
@@ -75,7 +75,7 @@ def parse_window(text):
             raise ValueError(text)
         return start, end
     except ValueError:
-        logging.warning(f"SYNC_WINDOW={text!r} nicht verständlich (Beispiel: 06:00-19:00, Anfang vor Ende). Es gilt ganztägig.")
+        logging.warning(f"SYNC_WINDOW={text!r} not understood (example: 06:00-19:00, start before end). Running all day.")
         return None
 
 
@@ -88,7 +88,7 @@ def parse_times(text):
         try:
             result.append(parse_time(part))
         except ValueError:
-            logging.warning(f"SYNC_TIMES: {part!r} übersprungen (Beispiel: 06:30,12:00).")
+            logging.warning(f"SYNC_TIMES: {part!r} skipped (example: 06:30,12:00).")
     return sorted(set(result))
 
 
@@ -96,11 +96,11 @@ def get_timezone():
     try:
         return ZoneInfo(config.TZ)
     except (ZoneInfoNotFoundError, ValueError):
-        raise SystemExit(f"Ungültige Zeitzone TZ={config.TZ!r}. Beispiele: Europe/Berlin, Europe/Vienna, Europe/Zurich.")
+        raise SystemExit(f"Invalid time zone TZ={config.TZ!r}. Examples: Europe/Berlin, Europe/Vienna, Europe/Zurich.")
 
 
 # ----------------------------------------------------------------------------------------------------
-# Zeitplan
+# Schedule
 # ----------------------------------------------------------------------------------------------------
 
 class Schedule:
@@ -111,22 +111,22 @@ class Schedule:
         self.times = parse_times(config.SYNC_TIMES)
         self.interval = timedelta(minutes=config.SYNC_INTERVAL_MINUTES)
         if config.SYNC_TIMES and not self.times:
-            logging.warning("SYNC_TIMES enthält keine gültige Uhrzeit, es gilt das Intervall.")
+            logging.warning("SYNC_TIMES contains no valid time, using the interval.")
 
     def describe(self):
         days = ", ".join(DAY_NAMES[d] for d in sorted(self.days))
         if self.times:
-            text = f"Feste Uhrzeiten {', '.join(t.strftime('%H:%M') for t in self.times)}"
+            text = f"Fixed times {', '.join(t.strftime('%H:%M') for t in self.times)}"
             if config.SYNC_WINDOW:
-                text += " (SYNC_WINDOW wird ignoriert)"
+                text += " (SYNC_WINDOW is ignored)"
         else:
             window = (f"{self.window[0].strftime('%H:%M')}-{self.window[1].strftime('%H:%M')}"
-                      if self.window else "ganztägig")
-            text = f"Alle {config.SYNC_INTERVAL_MINUTES} Minuten, {window}"
-        return f"{text}, Tage: {days}, Zeitzone: {config.TZ}"
+                      if self.window else "all day")
+            text = f"Every {config.SYNC_INTERVAL_MINUTES} minutes, {window}"
+        return f"{text}, days: {days}, time zone: {config.TZ}"
 
     def _next_allowed(self, moment):
-        # frühester erlaubter Zeitpunkt ab 'moment' (Wochentag und Zeitfenster)
+        # earliest allowed time from 'moment' on (weekday and time window)
         for _ in range(9):
             if moment.weekday() in self.days:
                 if not self.window:
@@ -141,7 +141,7 @@ class Schedule:
         return moment
 
     def _next_time(self, after):
-        # nächste feste Uhrzeit nach 'after'
+        # next fixed time after 'after'
         for offset in range(9):
             day = (after + timedelta(days=offset)).date()
             if day.weekday() not in self.days:
@@ -163,11 +163,11 @@ class Schedule:
 
 
 def fmt(moment):
-    return f"{DAY_NAMES[moment.weekday()]} {moment.strftime('%d.%m. %H:%M')}"
+    return f"{DAY_NAMES[moment.weekday()]} {moment.strftime('%d %b %H:%M')}"
 
 
 # ----------------------------------------------------------------------------------------------------
-# Status-Datei für den Healthcheck
+# Status file for the healthcheck
 # ----------------------------------------------------------------------------------------------------
 
 def write_health(ok, valid_until, failures, last_success, tz):
@@ -184,7 +184,7 @@ def write_health(ok, valid_until, failures, last_success, tz):
             json.dump(data, f)
         os.replace(tmp_path, HEALTH_FILE)
     except OSError as e:
-        logging.warning(f"Statusdatei konnte nicht geschrieben werden: {e}")
+        logging.warning(f"Status file could not be written: {e}")
 
 
 def healthcheck():
@@ -192,26 +192,26 @@ def healthcheck():
         with open(HEALTH_FILE, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        print("Keine Statusdatei: Die Schleife läuft nicht.")
+        print("No status file: the loop is not running.")
         return 1
     if not data.get("ok", False):
-        print(f"Die letzten {data.get('failures')} Läufe sind fehlgeschlagen.")
+        print(f"The last {data.get('failures')} runs failed.")
         return 1
     if time.time() > float(data.get("valid_until", 0)):
-        print("Statusdatei ist veraltet: Die Schleife reagiert nicht mehr.")
+        print("Status file is outdated: the loop is not responding.")
         return 1
     print("OK")
     return 0
 
 
 # ----------------------------------------------------------------------------------------------------
-# Sync starten
+# Start the sync
 # ----------------------------------------------------------------------------------------------------
 
 def _signal_process(proc, sig):
     try:
         if hasattr(os, "killpg"):
-            os.killpg(proc.pid, sig)   # ganze Prozessgruppe, damit auch Chromium beendet wird
+            os.killpg(proc.pid, sig)   # whole process group, so that Chromium is stopped too
         else:
             proc.terminate()
     except ProcessLookupError:
@@ -219,7 +219,7 @@ def _signal_process(proc, sig):
 
 
 def run_sync(state, timeout_seconds):
-    """Startet den Sync als eigenen Prozess. Gibt den Exit-Code zurück (None bei Timeout)."""
+    """Starts the sync as its own process. Returns the exit code (None on timeout)."""
     proc = subprocess.Popen(
         [sys.executable, SYNC_SCRIPT],
         cwd=str(config.BASE_DIR),
@@ -229,7 +229,7 @@ def run_sync(state, timeout_seconds):
     try:
         return proc.wait(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
-        logging.error(f"Der Sync hängt (länger als {timeout_seconds // 60} Minuten) und wird beendet.")
+        logging.error(f"The sync is stuck (longer than {timeout_seconds // 60} minutes) and is being stopped.")
         _signal_process(proc, getattr(signal, "SIGKILL", signal.SIGTERM))
         proc.wait()
         return None
@@ -240,15 +240,14 @@ def run_sync(state, timeout_seconds):
 def notify_crash(reason):
     try:
         import notifications
-        notifications.send_error_notification(
-            f"Das Sync-Programm bricht wiederholt ab ({reason}). Bitte das Log prüfen: docker compose logs untis-sync"
-        )
+        from texts import t
+        notifications.send_error_notification(t('crash_notice', reason=reason))
     except Exception as e:
-        logging.warning(f"Absturz-Meldung konnte nicht gesendet werden: {e}")
+        logging.warning(f"Crash notification could not be sent: {e}")
 
 
 # ----------------------------------------------------------------------------------------------------
-# Hauptschleife
+# Main loop
 # ----------------------------------------------------------------------------------------------------
 
 def run_loop():
@@ -260,7 +259,7 @@ def run_loop():
     state = {"proc": None}
 
     def handle_stop(signum, frame):
-        logging.info("Beenden angefordert ...")
+        logging.info("Stop requested ...")
         stop.set()
         proc = state["proc"]
         if proc is not None and proc.poll() is None:
@@ -280,7 +279,7 @@ def run_loop():
     def health(moment):
         write_health(failures < HEALTH_MAX_FAILURES, valid_until(moment), failures, last_success, tz)
 
-    logging.info(f"Zeitplan: {schedule.describe()}")
+    logging.info(f"Schedule: {schedule.describe()}")
     now = datetime.now(tz)
     next_time = now if config.SYNC_RUN_ON_START else schedule.first_run(now)
     health(now)
@@ -288,14 +287,14 @@ def run_loop():
     while not stop.is_set():
         wait_seconds = (next_time - datetime.now(tz)).total_seconds()
         if wait_seconds > 1:
-            logging.info(f"Nächster Lauf: {fmt(next_time)}")
+            logging.info(f"Next run: {fmt(next_time)}")
             health(next_time)
             if stop.wait(wait_seconds):
                 break
 
         started = datetime.now(tz)
         health(started)
-        logging.info("Starte Sync ...")
+        logging.info("Starting sync ...")
         code = run_sync(state, timeout_seconds)
         finished = datetime.now(tz)
         if stop.is_set():
@@ -305,15 +304,15 @@ def run_loop():
         if code == 0:
             failures = crashes = 0
             last_success = finished.isoformat(timespec="seconds")
-            logging.info(f"Sync erfolgreich ({duration} s).")
+            logging.info(f"Sync successful ({duration} s).")
         else:
             failures += 1
-            reason = "Timeout" if code is None else f"Exit-Code {code}"
+            reason = "timeout" if code is None else f"exit code {code}"
             if code == EXIT_HANDLED:
-                logging.warning(f"Sync fehlgeschlagen ({reason}), der Fehler wurde bereits gemeldet.")
+                logging.warning(f"Sync failed ({reason}), the error was already reported.")
             else:
                 crashes += 1
-                logging.error(f"Sync abgestürzt ({reason}), {crashes}. Mal hintereinander.")
+                logging.error(f"Sync crashed ({reason}), crash number {crashes} in a row.")
                 if crashes >= CRASH_NOTICE_AFTER and time.time() - last_notice >= CRASH_NOTICE_EVERY:
                     notify_crash(reason)
                     last_notice = time.time()
@@ -321,20 +320,20 @@ def run_loop():
         next_time = schedule.next_run(started, finished)
         health(next_time)
 
-    logging.info("Beendet.")
+    logging.info("Stopped.")
 
 
 def show_plan(count=8):
     tz = get_timezone()
     schedule = Schedule(tz)
     now = datetime.now(tz)
-    print(f"Zeitplan: {schedule.describe()}")
-    print(f"Jetzt: {fmt(now)}\n")
-    print("Geplante Läufe (angenommen, jeder Lauf dauert 0 Sekunden):")
+    print(f"Schedule: {schedule.describe()}")
+    print(f"Now: {fmt(now)}\n")
+    print("Planned runs (assuming every run takes 0 seconds):")
 
     moment = now if config.SYNC_RUN_ON_START else schedule.first_run(now)
     for i in range(count):
-        label = "  (beim Start, SYNC_RUN_ON_START)" if i == 0 and config.SYNC_RUN_ON_START else ""
+        label = "  (on start, SYNC_RUN_ON_START)" if i == 0 and config.SYNC_RUN_ON_START else ""
         print(f"  {fmt(moment)}{label}")
         moment = schedule.next_run(moment, moment)
 
@@ -343,7 +342,7 @@ if __name__ == "__main__":
     if "--healthcheck" in sys.argv:
         sys.exit(healthcheck())
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - [Zeitplan] %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - [Schedule] %(message)s")
     if "--plan" in sys.argv:
         show_plan()
         sys.exit(0)

@@ -11,12 +11,13 @@ Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, .
 - Optional push notifications via [ntfy](https://ntfy.sh) that show **exactly what changed**:
 
   ```
-  Fri 13.11. 08:00 · English (E L2)
-    + Ausfall eingetragen
-    ~ Raum: A101 → B202
-    + Hausaufgabe: Finish exercise 3
+  Fri 13 Nov 08:00 · English (E L2)
+    + Marked as cancelled
+    ~ Room: A101 → B202
+    + Homework: Finish exercise 3
   ```
 
+- Calendar and notification texts in English or German (`LANGUAGE=en|de`)
 - Configurable schedule (every X minutes inside a time window, or at fixed times), healthcheck, custom subject names
 
 > Unofficial project, not affiliated with Untis GmbH or Google. It logs in to WebUntis like your browser does.
@@ -101,6 +102,7 @@ All settings are environment variables in `.env`.
 | `UNTIS_USER`, `UNTIS_PASSWORD` | | WebUntis login |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | OAuth client of type "TVs and Limited Input devices" |
 | `CALENDAR_ID` | `primary` | Target calendar (`primary` = main calendar) |
+| `LANGUAGE` | `en` | Language of the calendar events and push notifications: `en` or `de`. Logs are always English |
 | `TZ` | `Europe/Berlin` | Time zone of the school. Used for the schedule, logs and calendar events |
 | `SYNC_WEEKS_AHEAD` | `12` | Weeks to sync in advance |
 | `SYNC_INTERVAL_MINUTES` | `5` | Minutes between two runs (counted from the start of the last run) |
@@ -111,7 +113,8 @@ All settings are environment variables in `.env`.
 | `SYNC_TIMEOUT_MINUTES` | `15` | A hanging run is stopped after this time |
 | `NTFY_TOPIC` | | ntfy topic for notifications (empty = none) |
 | `NTFY_SERVER` | `https://ntfy.sh` | Use your own ntfy server if you have one |
-| `FACH_MAP_USE_DEFAULTS` | `true` | `false` = use only your own `fach_map.json` |
+| `CANCEL_KEYWORDS` | `eigenverantwortliches arbeiten` | Phrases (comma separated, not case sensitive) that mark a lesson as cancelled when they appear in its info texts. See [Cancelled lessons](#cancelled-lessons) |
+| `FACH_MAP_USE_DEFAULTS` | `true` | `false` = use only your own `fach_map.json`. **Set it to `false` if your school is not the German school the built-in table was made for** (see [Subject names](#subject-names)) |
 | `PUID`, `PGID` | `1000` | Owner of the files in `./data` |
 
 Check your schedule without starting anything:
@@ -122,11 +125,29 @@ docker compose run --rm untis-sync python run_loop.py --plan
 
 ### Subject names
 
-WebUntis delivers short codes (`M`, `E-LK`, ...). The built-in table maps them to German names for one school. To use your own,
-copy `fach_map.example.json` to `data/fach_map.json` and edit it. The key is the beginning of the code, your entries win,
+WebUntis delivers short codes (`M`, `E-LK`, ...). The built-in table maps them to **German** subject names and is made for one
+German school (these names are not translated, `LANGUAGE` does not change them). To use your own, copy
+`fach_map.example.json` to `data/fach_map.json` and edit it. The key is the beginning of the code, your entries win,
 and longer codes should be listed before shorter ones.
+
+If your school is **not** a German school with the same codes, set `FACH_MAP_USE_DEFAULTS=false` in `.env`. Then only your own
+`data/fach_map.json` is used, and codes that are not in it are shown as they are. Without this setting a code like `M` or `E`
+would still be turned into `Mathematik` or `Englisch`.
+
 If your school shows more than three position columns (room, teacher, subject, ...) in the timetable, the code that reads
 them (`process_positions` in `get_week_and_lesson_information.py`) needs to be extended.
+
+### Cancelled lessons
+
+A lesson counts as cancelled (grey, struck through) when WebUntis marks it as cancelled. Some schools do not do that, they write a
+phrase like "work on your own" into the info or substitution text instead. Put such phrases into `CANCEL_KEYWORDS`
+(comma separated, not case sensitive), e.g. `CANCEL_KEYWORDS=self-study,room free`. The default is the phrase of the author's German school.
+
+### Language
+
+`LANGUAGE=en` (default) or `LANGUAGE=de` sets the language of everything you see in the calendar (titles, section headers,
+"No homework", ...) and in the notifications. If you change it later, all events are rewritten once on the next run, without a
+notification. Logs and console output are always English. Another language can be added in `texts.py`.
 
 ### Notifications
 
@@ -168,13 +189,13 @@ python run_loop.py
 |---|---|
 | "Google hasn't verified this app" | Normal. Click *Advanced*, then *Continue* |
 | Login stops working after 7 days | The consent screen was still in "Testing". Publish it ("In production"), then run `python auth.py --force` again |
-| ntfy message "Google-Anmeldung ungültig" | Access was revoked or expired. Run `docker compose run --rm untis-sync python auth.py --force` |
+| ntfy message "Google login invalid" (German: "Google-Anmeldung ungültig") | Access was revoked or expired. Run `docker compose run --rm untis-sync python auth.py --force` |
 | `invalid_client` during sign-in | Wrong client ID, or the client is not of type "TVs and Limited Input devices" |
 | `Permission denied` in `/data` | Create `data` yourself and set `PUID`/`PGID` to your `id -u` / `id -g` |
 | WebUntis password contains `$` | Put it in single quotes in `.env`: `UNTIS_PASSWORD='...'` |
 | Container is `unhealthy` | Three runs in a row failed, or the loop is stuck. See `docker compose logs --tail 100 untis-sync` and `data/sync_log.txt` |
 | Login to WebUntis fails | Check server, user and password. Single sign-on schools are not supported |
-| Wrong or missing subject names | Add them to `data/fach_map.json` |
+| Wrong, missing or German subject names | Add them to `data/fach_map.json`. For a non-German school also set `FACH_MAP_USE_DEFAULTS=false` |
 
 ## Notes
 

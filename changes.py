@@ -1,52 +1,57 @@
 """
-Vergleicht zwei Snapshots ('fields') einer Stunde und liefert eine Liste von Änderungen.
+Compares two snapshots ('fields') of a lesson and returns a list of changes.
 
-Jede Änderung ist ein Dictionary:
-    {'field': 'room', 'label': 'Raum', 'op': 'change', 'old': 'A101', 'new': 'B202', 'high': True}
-    optional zusätzlich 'text' (ersetzt die ganze Zeile in der Meldung, z. B. "Ausfall eingetragen")
+Every change is a dictionary:
+    {'field': 'room', 'label': 'Room', 'op': 'change', 'old': 'A101', 'new': 'B202', 'high': True}
+    optionally also 'text' (replaces the whole line in the notification, e.g. "Marked as cancelled")
 
-    op:   'add'    = vorher leer, jetzt gefüllt
-          'remove' = vorher gefüllt, jetzt leer
-          'change' = vorher und jetzt gefüllt, aber anders
-    high: True = wichtige Änderung (löst in notifications.py die hohe ntfy-Priorität aus)
+    op:   'add'    = was empty, now filled
+          'remove' = was filled, now empty
+          'change' = was filled and is filled, but different
+    high: True = important change (triggers the high ntfy priority in notifications.py)
 
-Neues Feld ergänzen:
-    1. in main3.0.py im 'fields'-Dictionary einen Eintrag hinzufügen
-    2. unten in FIELD_DEFS einen Eintrag hinzufügen (key, label, kind, high). Fertig.
+The label and the fixed texts come from texts.py in the configured LANGUAGE.
+
+Add a new field:
+    1. add an entry to the 'fields' dictionary in main3.0.py
+    2. add an entry to FIELD_DEFS below (key, label_key, kind, high) and the label ('field_<key>') to every
+       language in texts.py. Done.
 
 kind:
-    'text'         einfacher Text (alt -> neu)
-    'list_joined'  Liste, die als ein Text mit Komma angezeigt wird (z. B. Raum, Lehrer)
-    'list_items'   Liste, bei der jeder Eintrag einzeln hinzugefügt/entfernt wird (z. B. Hausaufgaben)
-    'bool'         Ja/Nein mit festen Texten 'on' / 'off' (z. B. Ausfall)
+    'text'         simple text (old -> new)
+    'list_joined'  list that is shown as one text with commas (e.g. room, teacher)
+    'list_items'   list where every entry is added/removed on its own (e.g. homework)
+    'bool'         yes/no with fixed texts on_key / off_key (e.g. cancelled)
 """
 
 from collections import Counter
 
-# Reihenfolge = Reihenfolge der Zeilen in der Meldung
+import texts
+
+# Order = order of the lines in the notification
 FIELD_DEFS = [
-    {'key': 'cancelled', 'label': 'Ausfall', 'kind': 'bool',
-     'on': 'Ausfall eingetragen', 'off': 'Ausfall aufgehoben', 'high': True},
-    {'key': 'time', 'label': 'Zeit', 'kind': 'text', 'high': False},
-    {'key': 'title', 'label': 'Fach', 'kind': 'text', 'high': False},
-    {'key': 'room', 'label': 'Raum', 'kind': 'list_joined', 'high': True},
-    {'key': 'teacher', 'label': 'Lehrer', 'kind': 'list_joined', 'high': True},
-    {'key': 'exam', 'label': 'Klausur', 'kind': 'text', 'high': True},
-    {'key': 'homework', 'label': 'Hausaufgabe', 'kind': 'list_items', 'high': True},
-    {'key': 'teaching_content', 'label': 'Lehrstoff', 'kind': 'text', 'high': False},
-    {'key': 'info', 'label': 'Info', 'kind': 'text', 'high': False},
-    {'key': 'text', 'label': 'Text', 'kind': 'text', 'high': False},
-    {'key': 'notes', 'label': 'Notes', 'kind': 'text', 'high': False},
-    {'key': 'substitution', 'label': 'Vertretung', 'kind': 'text', 'high': False},
+    {'key': 'cancelled', 'label_key': 'field_cancelled', 'kind': 'bool',
+     'on_key': 'cancelled_on', 'off_key': 'cancelled_off', 'high': True},
+    {'key': 'time', 'label_key': 'field_time', 'kind': 'text', 'high': False},
+    {'key': 'title', 'label_key': 'field_title', 'kind': 'text', 'high': False},
+    {'key': 'room', 'label_key': 'field_room', 'kind': 'list_joined', 'high': True},
+    {'key': 'teacher', 'label_key': 'field_teacher', 'kind': 'list_joined', 'high': True},
+    {'key': 'exam', 'label_key': 'field_exam', 'kind': 'text', 'high': True},
+    {'key': 'homework', 'label_key': 'field_homework', 'kind': 'list_items', 'high': True},
+    {'key': 'teaching_content', 'label_key': 'field_teaching_content', 'kind': 'text', 'high': False},
+    {'key': 'info', 'label_key': 'field_info', 'kind': 'text', 'high': False},
+    {'key': 'text', 'label_key': 'field_text', 'kind': 'text', 'high': False},
+    {'key': 'notes', 'label_key': 'field_notes', 'kind': 'text', 'high': False},
+    {'key': 'substitution', 'label_key': 'field_substitution', 'kind': 'text', 'high': False},
 ]
 
 
 # ----------------------------------------------------------------------------------------------------
-# Hilfsfunktionen
+# Helper functions
 # ----------------------------------------------------------------------------------------------------
 
 def _clean(value):
-    # Text normalisieren (Whitespace und Zeilenumbrüche vereinheitlichen), damit nur echte Änderungen zählen
+    # normalize text (unify whitespace and line breaks) so that only real changes count
     if value is None:
         return ""
     return " ".join(str(value).split())
@@ -59,7 +64,7 @@ def _clean_list(values):
 def _make(spec, op, old=None, new=None, text=None):
     change = {
         'field': spec['key'],
-        'label': spec['label'],
+        'label': texts.t(spec['label_key']),
         'op': op,
         'old': old,
         'new': new,
@@ -71,7 +76,7 @@ def _make(spec, op, old=None, new=None, text=None):
 
 
 def _view(fields):
-    # Snapshot um abgeleitete Werte ergänzen (z. B. 'time' aus start und end)
+    # add derived values to the snapshot (e.g. 'time' from start and end)
     view = dict(fields)
     start = fields.get('start') or ''
     end = fields.get('end') or ''
@@ -80,7 +85,7 @@ def _view(fields):
 
 
 # ----------------------------------------------------------------------------------------------------
-# Vergleich je Feldart
+# Comparison per kind of field
 # ----------------------------------------------------------------------------------------------------
 
 def _diff_text(spec, old, new):
@@ -105,7 +110,7 @@ def _diff_list_items(spec, old, new):
     added = Counter(new_items) - Counter(old_items)
 
     result = []
-    for item in old_items:                      # Reihenfolge wie im Original beibehalten
+    for item in old_items:                      # keep the original order
         if removed[item] > 0:
             removed[item] -= 1
             result.append(_make(spec, 'remove', item, None))
@@ -121,8 +126,8 @@ def _diff_bool(spec, old, new):
     if o == n:
         return []
     if n:
-        return [_make(spec, 'add', text=spec['on'])]
-    return [_make(spec, 'remove', text=spec['off'])]
+        return [_make(spec, 'add', text=texts.t(spec['on_key']))]
+    return [_make(spec, 'remove', text=texts.t(spec['off_key']))]
 
 
 _HANDLERS = {
@@ -134,11 +139,11 @@ _HANDLERS = {
 
 
 # ----------------------------------------------------------------------------------------------------
-# Öffentliche Funktion (wird von main3.0.py aufgerufen)
+# Public function (called by main3.0.py)
 # ----------------------------------------------------------------------------------------------------
 
 def diff_fields(old_fields, new_fields):
-    """Gibt eine Liste von Änderungen zurück (leer, wenn nichts anders ist oder kein alter Snapshot da ist)."""
+    """Returns a list of changes (empty if nothing differs or there is no old snapshot)."""
     if not old_fields or new_fields is None:
         return []
 
@@ -158,28 +163,28 @@ def diff_fields(old_fields, new_fields):
 
 if __name__ == "__main__":
     old = {
-        'title': 'Englisch LK (E  L2)', 'start': '2026-11-13T08:00:00', 'end': '2026-11-13T08:45:00',
+        'title': 'English (E L2)', 'start': '2026-11-13T08:00:00', 'end': '2026-11-13T08:45:00',
         'room': ['A101'], 'teacher': ['DRK (Druschke)'], 'cancelled': False,
-        'homework': ['Seite 12 lesen'], 'teaching_content': '', 'exam': '',
+        'homework': ['Read page 12'], 'teaching_content': '', 'exam': '',
         'info': '', 'text': '', 'notes': '', 'substitution': '',
     }
     new = dict(old)
     new.update({
         'cancelled': True,
         'room': ['B202'],
-        'homework': ['Seite 12 lesen', 'Film anschauen'],
-        'teaching_content': 'Etappen der Entrechtung (S. 318-330)',
-        'exam': 'EF; Q1; Q2 Nachschreiber',
+        'homework': ['Read page 12', 'Watch the film'],
+        'teaching_content': 'Causes of the war (p. 318-330)',
+        'exam': 'Grade 11; Grade 12 retake',
         'end': '2026-11-13T09:00:00',
     })
 
     for c in diff_fields(old, new):
         print(c)
 
-    # einfache Prüfungen
+    # simple checks
     assert diff_fields(old, old) == []
     assert diff_fields(None, new) == []
     fields_changed = {c['field'] for c in diff_fields(old, new)}
     assert fields_changed == {'cancelled', 'room', 'homework', 'teaching_content', 'exam', 'time'}, fields_changed
     assert [c['op'] for c in diff_fields(new, old) if c['field'] == 'cancelled'] == ['remove']
-    print("\nAlle Tests bestanden.")
+    print("\nAll tests passed.")

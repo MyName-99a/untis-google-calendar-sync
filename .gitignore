@@ -1,4 +1,4 @@
-# Zugangsdaten und lokale Daten (niemals einchecken)
+# Credentials and local data (never commit)
 .env
 data/
 token.json*
@@ -10,7 +10,7 @@ health.json
 .google_auth_error_gemeldet
 fach_map.json
 
-# Python und Editoren
+# Python and editors
 .venv/
 venv/
 __pycache__/
@@ -18,7 +18,7 @@ __pycache__/
 .idea/
 .vscode/
 
-# Eigene Arbeitsordner und Tests
+# Own working folders and tests
 000_Archive/
 000_Test/
 000_Tests/

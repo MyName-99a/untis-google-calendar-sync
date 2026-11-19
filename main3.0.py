@@ -6,7 +6,7 @@ import time
 import sys
 from datetime import datetime, date, timedelta
 
-# Google API importe
+# Google API imports
 from googleapiclient.discovery import build
 
 # Own files
@@ -15,32 +15,31 @@ import auth
 import get_week_and_lesson_information as untis_api
 import notifications
 import changes
+from texts import t
 
-# https://emojidb.org/house-emojis?utm_source=user_search - Emojis sind von hier gute seite eig
+# https://emojidb.org/house-emojis?utm_source=user_search - the emojis are from here, good site
 
-# pfade und so (alles liegt im Datenordner, ohne Angabe ist das der Projektordner)
+# Paths (everything lives in the data folder, without a setting that is the project folder).
+# The file names are German for historical reasons and kept, so that existing installations keep working.
 DATA_DIR = config.DATA_DIR
 HASH_FILE = os.path.join(DATA_DIR, 'gespeicherte_hashes.json')
 LOG_FILE = os.path.join(DATA_DIR, 'sync_log.txt')
 
-# Merker-Datei, damit die Meldung "Google-Anmeldung ungültig" nicht alle paar Minuten kommt
+# Marker file, so that the "Google login invalid" message does not come every few minutes
 AUTH_ERROR_MARKER = os.path.join(DATA_DIR, '.google_auth_error_gemeldet')
 
-# Google Kalender Farben (colorId)
-COLOR_NORMAL = '1'    # Lavendel (wie bisher)
-COLOR_AUSFALL = '8'   # Grau (hat Vorrang vor Klausur)
-COLOR_EXAM = '11'     # Tomate (Klausur)
+# Google Calendar colors (colorId)
+COLOR_NORMAL = '1'    # Lavender (as before)
+COLOR_CANCELLED = '8'  # Grey (wins over exam)
+COLOR_EXAM = '11'     # Tomato (exam)
 
-# Anzeigenamen für die Felder im DETAILS-Block (Reihenfolge = Reihenfolge im Kalender)
-DETAIL_LABELS = {
-    'info': 'Info',
-    'text': 'Text',
-    'notes': 'Notes',
-    'substitution': 'Vertretung',
-}
+# Fields of the DETAILS block (order = order in the calendar). The names come from texts.py ('field_<key>')
+DETAIL_KEYS = ['info', 'text', 'notes', 'substitution']
 
+# Built-in subject names for one German school (the keys are the codes from WebUntis).
+# Add your own in data/fach_map.json, or set FACH_MAP_USE_DEFAULTS=false to use only your own file (see README).
 FACH_MAP = {
-    # LKs
+    # Advanced courses (LK)
     'BI-LK': 'Biologie LK',
     'CH-LK': 'Chemie LK',
     'EK-LK': 'Erdkunde LK',
@@ -51,25 +50,25 @@ FACH_MAP = {
     'SP-LK': 'Sport LK',
     'SW-LK': 'Sozialwissenschaften LK',
 
-    # LKs kurze Kürzel
+    # Advanced courses, short codes
     'D-LK': 'Deutsch LK',
     'E-LK': 'Englisch LK',
     'S-LK': 'Spanisch LK',
 
-    # LKs kurze Kürzel - Neu
+    # Advanced courses, short codes - new
     'E L': 'Englisch LK',
     'GE L': 'Geschichte LK',
     'E  L': 'Englisch LK',
     'GE  L': 'Geschichte LK',
 
-    # Lange Kürzel
+    # Long codes
     'EKE': 'Erkunde Englisch',
     'GEE': 'Geschichte Englisch',
 
-    # Projektkurs
+    # Project course
     'PX': 'Projektkurs',
 
-    # Grundkurse
+    # Basic courses
     'BI': 'Biologie',
     'CH': 'Chemie',
     'ER': 'Evangelische Religion',
@@ -86,7 +85,7 @@ FACH_MAP = {
     'GK': 'Gemeinschaftskunde',
     'REV': 'Evangelische Religion',
 
-    # Grundkurse einzelne Kürzel
+    # Basic courses, single-letter codes
     'D': 'Deutsch',
     'F': 'Französisch',
     'M': 'Mathematik',
@@ -99,7 +98,7 @@ FACH_MAP = {
     # '': '', '': '', '': '',
 }
 
-# eigene Einträge aus fach_map.json im Datenordner kommen zuerst (siehe config.load_fach_map)
+# own entries from fach_map.json in the data folder come first (see config.load_fach_map)
 FACH_MAP = config.load_fach_map(FACH_MAP)
 
 logging.basicConfig(
@@ -111,28 +110,28 @@ logging.basicConfig(
 
 def log_separator():
     separator = "-" * 50
-    logging.info("Ende des Syncs!\n\n" + separator + "\n")
+    logging.info("End of sync!\n\n" + separator + "\n")
 
 
 # helpers
 
 def strike(text):
-    # wandelt Text in durchgestrichenen Unicode-Text
-    return "".join([char + u'\u0336' for char in text])
+    # turns text into struck-through unicode text
+    return "".join([char + u'̶' for char in text])
 
 
 def is_filled(value):
-    # True, wenn ein Feld wirklich Inhalt hat (nicht None, leer oder "---")
+    # True if a field really has content (not None, empty or "---")
     return bool(value) and str(value).strip() not in ("", "---")
 
 
 def clean_text(value):
-    # gibt einen bereinigten String zurück, oder "" wenn nichts Sinnvolles drinsteht
+    # returns a cleaned string, or "" if there is nothing useful in it
     return str(value).strip() if is_filled(value) else ""
 
 
 def exam_summary(exam):
-    # macht aus dem Exam-Dict einen kurzen Text für den Snapshot (Name und Beschreibung, ohne Doppelung)
+    # turns the exam dict into a short text for the snapshot (name and description, without duplicates)
     if not exam:
         return ""
     parts = []
@@ -144,10 +143,10 @@ def exam_summary(exam):
 
 
 def get_google_service():
-    # Die Anmeldung kommt aus token.json (erstellt mit auth.py), Details stehen in auth.py
+    # The login comes from token.json (created with auth.py), details are in auth.py
     creds = auth.get_credentials()
 
-    # Anmeldung funktioniert (wieder): Merker für die Fehlermeldung zurücksetzen
+    # Login works (again): reset the marker for the error message
     if os.path.exists(AUTH_ERROR_MARKER):
         os.remove(AUTH_ERROR_MARKER)
 
@@ -155,28 +154,28 @@ def get_google_service():
 
 
 def notify_auth_error_once(message, every_hours=24):
-    # schickt die Meldung höchstens einmal pro Tag, bis die Anmeldung wieder funktioniert
+    # sends the message at most once a day, until the login works again
     try:
         if os.path.exists(AUTH_ERROR_MARKER):
             if time.time() - os.path.getmtime(AUTH_ERROR_MARKER) < every_hours * 3600:
                 return
-        notifications.send_error_notification(f"Google-Anmeldung ungültig: {message}")
+        notifications.send_error_notification(t('auth_invalid', error=message))
         with open(AUTH_ERROR_MARKER, 'w') as f:
             f.write(datetime.now().isoformat())
     except Exception as e:
-        logging.warning(f"Auth-Meldung konnte nicht gesendet werden: {e}")
+        logging.warning(f"Auth notification could not be sent: {e}")
 
 
 def format_untis_time(untis_date_val, untis_time_val):
-    # bereinigt format der zeit für untis und google
-    # 1. Nur ziffern extrahieren
+    # cleans up the time format for untis and google
+    # 1. extract digits only
     d_raw = "".join(filter(str.isdigit, str(untis_date_val)))
     t_raw = "".join(filter(str.isdigit, str(untis_time_val)))
 
-    # 2. datum auf exakt 8 Stellen begrenzen (YYYYMMDD)
+    # 2. limit the date to exactly 8 digits (YYYYMMDD)
     clean_date = d_raw[:8]
 
-    # 3. Zeit auf exakt 4 Stellen bringen (HHMM)
+    # 3. bring the time to exactly 4 digits (HHMM)
     clean_time = t_raw.zfill(4)[-4:]
 
     formatted_date = f"{clean_date[:4]}-{clean_date[4:6]}-{clean_date[6:8]}"
@@ -197,83 +196,83 @@ def load_hashes():
 
 
 def save_hashes(hashes):
-    heute = date.today()
-    gefiltert = {}
+    today = date.today()
+    filtered = {}
 
     for k, v in hashes.items():
         try:
-            # speichern nur wenn das datum nicht älter als 3 tage ist
+            # only keep the entry if its date is not older than 3 days
             item_date = date.fromisoformat(v.get('date'))
-            if item_date >= heute - timedelta(days=3):
-                gefiltert[k] = v
+            if item_date >= today - timedelta(days=3):
+                filtered[k] = v
         except (ValueError, TypeError):
-            gefiltert[k] = v
+            filtered[k] = v
 
     with open(HASH_FILE, 'w') as f:
-        json.dump(gefiltert, f, indent=4)
+        json.dump(filtered, f, indent=4)
 
 
 def format_title(lesson):
-    abk = "---"
-    # Versuche das Fach zu finden in den positions die möglich sind
+    abbr = "---"
+    # try to find the subject in the possible positions
     for key in ['LESSON', 'SUBJECT', 'UNKNOWN']:
         if lesson.get(key) and isinstance(lesson[key], list) and len(lesson[key]) > 0:
             val = lesson[key][0].strip()
             if val and val != "---":
-                # Macht aus GE-LK1 (GE-LK1) -> GE-LK1, weil im display name bei untis das so doppelt ist
-                abk = val.split('(')[0].strip()
+                # turns GE-LK1 (GE-LK1) -> GE-LK1, because untis shows it twice in the display name
+                abbr = val.split('(')[0].strip()
                 break
 
-    # wenn kein Fach da ist, also '---', Info als Fallback nutzen
-    if abk == "---":
+    # if there is no subject, i.e. '---', use info as a fallback
+    if abbr == "---":
         details = lesson.get('details', {})
         for detail_key in ['info', 'substitution', 'text']:
             detail_val = details.get(detail_key)
             if detail_val and detail_val.strip() and detail_val.strip() != "---":
                 res = detail_val.strip()
                 return res[:50] + "..." if len(res) > 50 else res
-        return "Sondertermin"
+        return t('special_event')
 
-    # fach map anwenden, die oben definiert wurde. falls dächer fehlen hinzufpgne!
+    # apply the fach map (subject names) defined above. if codes are missing, add them!
     found_long = None
     for k, v in FACH_MAP.items():
-        if abk.startswith(k):
+        if abbr.startswith(k):
             found_long = v
             break
 
     if found_long:
-        if abk.lower() in found_long.lower():
+        if abbr.lower() in found_long.lower():
             return found_long
-        return f"{found_long} ({abk})"
+        return f"{found_long} ({abbr})"
 
-    return abk
+    return abbr
 
 
 def build_exam_block(exam):
-    # baut den KLAUSUR-Block. Gibt eine Liste von Zeilen zurück (leer, wenn nichts Sinnvolles da ist)
+    # builds the EXAM block. Returns a list of lines (empty if there is nothing useful)
     if not exam:
         return []
 
     name = str(exam.get('name') or '').strip()
-    beschreibung = str(exam.get('description') or '').strip()
-    typ = str(exam.get('type_long_name') or '').strip()
+    description = str(exam.get('description') or '').strip()
+    exam_type = str(exam.get('type_long_name') or '').strip()
 
     parts = []
-    if name and beschreibung and name == beschreibung:
-        # exakt gleich -> nur einmal anzeigen
-        parts.append(f"Name und Beschreibung: {name}")
+    if name and description and name == description:
+        # exactly the same -> show only once
+        parts.append(t('exam_name_and_description', value=name))
     else:
         if name:
-            parts.append(f"Name: {name}")
-        if beschreibung:
-            parts.append(f"Beschreibung: {beschreibung}")
-    if typ:
-        parts.append(f"Typ: {typ}")
+            parts.append(t('exam_name', value=name))
+        if description:
+            parts.append(t('exam_description', value=description))
+    if exam_type:
+        parts.append(t('exam_type', value=exam_type))
 
     if not parts:
         return []
 
-    lines = ["-------- KLAUSUR -------"]
+    lines = [t('exam_header')]
     lines.append("\n\n".join(parts))
     lines.append("------------------------")
     lines.append("")
@@ -284,37 +283,37 @@ def build_description(lesson, homeworks, teacher_list_formatted, teaching_conten
     details = lesson.get('details', {})
     lines = []
 
-    # 1. HAUSAUFGABEN immer anzeigen
-    lines.append("--- HAUSAUFGABEN ---")
+    # 1. HOMEWORK is always shown
+    lines.append(t('homework_header'))
     if homeworks:
         for text, start, due in homeworks:
             lines.append(f"{text}")
     else:
-        lines.append("Keine Hausis")
+        lines.append(t('no_homework'))
     lines.append("------------------------")
     lines.append("")
 
-    # 2. KLAUSUR, eigener Block direkt unter den Hausaufgaben (nur wenn ein Exam da ist)
+    # 2. EXAM, own block directly below the homework (only if there is an exam)
     lines.extend(build_exam_block(exam))
 
-    # 3. DETAILS, alles in einem Block, für schön (Lehrstoff steht am Ende des Blocks)
+    # 3. DETAILS, everything in one block, looks nicer (the teaching content is at the end of the block)
     detail_lines = []
-    for key, label in DETAIL_LABELS.items():
+    for key in DETAIL_KEYS:
         v = details.get(key)
         if is_filled(v):
-            detail_lines.append(f"{label}: {v}")
+            detail_lines.append(f"{t('field_' + key)}: {v}")
     if is_filled(teaching_content):
-        detail_lines.append(f"Lehrstoff: {str(teaching_content).strip()}")
+        detail_lines.append(f"{t('field_teaching_content')}: {str(teaching_content).strip()}")
 
     if detail_lines:
-        lines.append("-------- DETAILS -------")
+        lines.append(t('details_header'))
         lines.append("\n\n".join(detail_lines))
         lines.append("------------------------")
         lines.append("")
 
-    # 4. LEHRER, ohne Block, unter allen anderen sachen
+    # 4. TEACHER, without a block, below everything else
     if teacher_list_formatted:
-        lines.append(f"Lehrer: {', '.join(teacher_list_formatted)}")
+        lines.append(f"{t('field_teacher')}: {', '.join(teacher_list_formatted)}")
         lines.append("")
 
     return "\n".join(lines)
@@ -351,11 +350,11 @@ def cleanup_old_logs(days=7):
             f.writelines(new_lines)
 
         if deleted_count > 0:
-            logging.info(f"Log-Cleanup: {deleted_count} alte Zeilen entfernt.")
+            logging.info(f"Log cleanup: {deleted_count} old lines removed.")
 
     except Exception as e:
-        print(f"Fehler beim Log-Cleanup: {e}")
-        logging.error(f"Fehler beim Log-Cleanup: {e}")
+        print(f"Error during log cleanup: {e}")
+        logging.error(f"Error during log cleanup: {e}")
 
 
 # main function
@@ -364,22 +363,22 @@ def sync():
         service = get_google_service()
         local_hashes = load_hashes()
         new_hashes = {}
-        change_log = []  # strukturierte Änderungen für die Benachrichtigung
+        change_log = []  # structured changes for the notification
         c_new, c_upd, c_skip, c_del, c_silent = 0, 0, 0, 0, 0
 
         # --------------------------------------------------
-        # ZEITFENSTER: immer genau EINE der beiden Varianten aktiv lassen
+        # TIME RANGE: always keep exactly ONE of the two variants active
 
-        # Variante A (normal): heute bis in 12 Wochen
+        # Variant A (normal): today until 12 weeks ahead
         start_date = date.today()
         end_date = start_date + timedelta(weeks=config.SYNC_WEEKS_AHEAD)
 
-        # Variante B (Test): fester Zeitraum (zum Testen A auskommentieren und B aktivieren)
+        # Variant B (test): fixed range (to test, comment out A and activate B)
         # start_date = date.fromisoformat("2026-11-09")
         # end_date = date.fromisoformat("2026-11-13")
         # --------------------------------------------------
 
-        logging.info(f"Hole Daten für {start_date} bis {end_date}")
+        logging.info(f"Fetching data for {start_date} to {end_date}")
         week_data = untis_api.get_week_data_from_api(start_date.isoformat(), end_date.isoformat())
 
         for day in week_data:
@@ -393,55 +392,55 @@ def sync():
 
                 details = lesson.get('details', {})
 
-                # check ausfall
+                # check cancellation: status CANCELLED, or an info text with one of the CANCEL_KEYWORDS
                 sub_text = ""
                 for val in details.values():
-                    if val and "eigenverantwortliches arbeiten" in str(val).lower():
+                    if val and any(keyword in str(val).lower() for keyword in config.CANCEL_KEYWORDS):
                         sub_text = str(val)
                         break
-                is_ausfall = (lesson.get('status') == 'CANCELLED') or (sub_text != "")
+                is_cancelled = (lesson.get('status') == 'CANCELLED') or (sub_text != "")
 
-                # formatieren der zeit
+                # format the time
                 start_iso = format_untis_time(untis_date, lesson['start'])
                 end_iso = format_untis_time(untis_date, lesson['end'])
 
-                # detaildaten holen: hausaufgaben, lehrstoff und exam (ein request pro stunde)
+                # fetch detail data: homework, teaching content and exam (one request per lesson)
                 detail = {'homeworks': [], 'teaching_content': None, 'exam': None}
                 try:
                     detail = untis_api.get_lesson_detail(u_id, start_iso, end_iso)
                 except Exception as hw_e:
-                    logging.warning(f"Detaildaten für ID {u_id} fehlgeschlagen: {hw_e}")
+                    logging.warning(f"Detail data for ID {u_id} failed: {hw_e}")
 
                 hw = detail.get('homeworks') or []
                 teaching_content = detail.get('teaching_content')
                 exam = detail.get('exam')
 
-                # lehrer holen
+                # get teachers
                 current_teachers = lesson.get('TEACHER', [])
                 removed_teachers = lesson.get('REMOVED_TEACHER', [])
                 teacher_parts = []
-                for t in current_teachers:
-                    if t and t.strip() != "---":
-                        # Hoffelntlich error behoben: Wenn Ausfall, dann auch current_teacher streichen. Wurde nicht geamcht vorher. Trotz ausfall wurde der lehrer nicht durchgestrichen.
-                        if is_ausfall:
-                            teacher_parts.append(strike(t))
+                for teacher in current_teachers:
+                    if teacher and teacher.strip() != "---":
+                        # Hopefully fixed: if cancelled, also strike through the current teacher. This was not done before. The teacher was not struck through despite the cancellation.
+                        if is_cancelled:
+                            teacher_parts.append(strike(teacher))
                         else:
-                            teacher_parts.append(t)
-                for t in removed_teachers:
-                    if t and t.strip() != "---":
-                        striked_t = strike(t)
+                            teacher_parts.append(teacher)
+                for teacher in removed_teachers:
+                    if teacher and teacher.strip() != "---":
+                        striked_t = strike(teacher)
                         if striked_t not in teacher_parts:
                             teacher_parts.append(striked_t)
                 valid_teachers = teacher_parts
 
-                # raum holen
+                # get rooms
                 current_rooms = lesson.get('ROOM', [])
                 removed_rooms = lesson.get('REMOVED_ROOM', [])
                 room_parts = []
                 for r in current_rooms:
                     if r and r.strip() != "---":
-                        # Hier das gleiche wie mit den lehrern oben
-                        if is_ausfall:
+                        # same as with the teachers above
+                        if is_cancelled:
                             room_parts.append(strike(r))
                         else:
                             room_parts.append(r)
@@ -451,33 +450,33 @@ def sync():
                         if striked_r not in room_parts:
                             room_parts.append(striked_r)
 
-                room_base = ", ".join(room_parts) if room_parts else "Kein Raum"
+                room_base = ", ".join(room_parts) if room_parts else t('no_room')
 
-                # für icons (ℹ steht immer vor 🏠︎, falls beides da ist)
-                # Lehrstoff und Exam zählen bewusst NICHT für das ⚠️, nur Info/Text/Notes/Vertretung
+                # for icons (ℹ always comes before 🏠︎, if both are there)
+                # Teaching content and exam deliberately do NOT count for the ⚠️, only info/text/notes/substitution
                 has_details = any(is_filled(v) for v in details.values())
                 has_hw = len(hw) > 0
 
                 indicators = []
                 if has_details:
-                    indicators.append("⚠️")
+                    indicators.append("⚠️")  # ⚠️
                 if has_hw:
-                    indicators.append("🏠")
+                    indicators.append("\U0001f3e0")    # 🏠
 
-                # zusammenführen mit "󠁯•󠁏󠁏" dazwischen
-                separator = " 󠁯•󠁏󠁏 "
+                # join with an invisible tag-character separator in between (U+E006F, bullet, U+E004F x2)
+                separator = " \U000e006f•\U000e004f\U000e004f "
                 if indicators:
                     room = f"{room_base}{separator}{separator.join(indicators)}"
                 else:
                     room = room_base
 
-                # titel machen für ausfall (base_title ohne Präfix wird für den Snapshot gebraucht)
+                # build the title for a cancellation (base_title without prefix is needed for the snapshot)
                 base_title = format_title(lesson)
-                titel = f"AUSFALL: {base_title}" if is_ausfall else base_title
+                title = t('cancelled_title', title=base_title) if is_cancelled else base_title
 
-                # farbe: ausfall (grau) gewinnt vor klausur (rot)
-                if is_ausfall:
-                    color_id = COLOR_AUSFALL
+                # color: cancelled (grey) wins over exam (red)
+                if is_cancelled:
+                    color_id = COLOR_CANCELLED
                 elif exam:
                     color_id = COLOR_EXAM
                 else:
@@ -485,15 +484,15 @@ def sync():
 
                 description = build_description(lesson, hw, valid_teachers, teaching_content, exam)
 
-                # snapshot aller einzelnen felder, damit man bei änderungen genau vergleichen kann.
-                # neue felder = hier einen eintrag ergänzen (und in changes.py die Feldliste)
+                # snapshot of every single field, so that changes can be compared exactly.
+                # new fields = add an entry here (and in changes.py the field list)
                 fields = {
                     'title': base_title,
                     'start': start_iso,
                     'end': end_iso,
                     'room': [r.strip() for r in current_rooms if is_filled(r)],
-                    'teacher': [t.strip() for t in current_teachers if is_filled(t)],
-                    'cancelled': is_ausfall,
+                    'teacher': [x.strip() for x in current_teachers if is_filled(x)],
+                    'cancelled': is_cancelled,
                     'homework': [clean_text(text) for text, _, _ in hw if is_filled(text)],
                     'teaching_content': clean_text(teaching_content),
                     'exam': exam_summary(exam),
@@ -504,7 +503,7 @@ def sync():
                 }
 
                 event_data = {
-                    'summary': titel,
+                    'summary': title,
                     'location': room,
                     'start': start_iso,
                     'end': end_iso,
@@ -513,9 +512,9 @@ def sync():
                 }
 
                 current_hash = generate_hash(event_data)
-                logging.info(f"Prüfe Termin: {titel} am {start_iso}")
+                logging.info(f"Checking event: {title} on {start_iso}")
 
-                # 5. Google Event Body
+                # 5. Google event body
                 event_body = {
                     'summary': event_data['summary'],
                     'location': event_data['location'],
@@ -543,12 +542,12 @@ def sync():
                         c_skip += 1
                         new_hashes[u_id] = dict(old)
                         if old_fields is None:
-                            # Termin unverändert, bekommt nur den Snapshot nachgetragen (einmalig nach der Umstellung)
+                            # Event unchanged, only gets the snapshot added (once, after the switch)
                             new_hashes[u_id]['fields'] = fields
                     else:
                         service.events().patch(calendarId=config.CALENDAR_ID, eventId=g_id, body=event_body).execute()
 
-                        # was genau hat sich geändert? (ohne alten Snapshot ist kein Vergleich möglich)
+                        # what exactly changed? (without an old snapshot no comparison is possible)
                         diff = changes.diff_fields(old_fields, fields) if old_fields else []
                         if diff:
                             c_upd += 1
@@ -557,15 +556,15 @@ def sync():
                                 'date': fmt_date,
                                 'start': start_iso,
                                 'title': base_title,
-                                'cancelled': is_ausfall,
+                                'cancelled': is_cancelled,
                                 'changes': diff,
                             })
                         else:
-                            # Beschreibung/Format neu, aber inhaltlich nichts, was eine Meldung wert ist
+                            # description/format is new, but nothing worth a notification changed in content
                             c_silent += 1
 
                         new_hashes[u_id] = {'hash': current_hash, 'google_id': g_id, 'date': fmt_date,
-                                            'summary': titel, 'fields': fields}
+                                            'summary': title, 'fields': fields}
                     del local_hashes[u_id]
                 else:
                     created = service.events().insert(calendarId=config.CALENDAR_ID, body=event_body).execute()
@@ -575,28 +574,28 @@ def sync():
                         'date': fmt_date,
                         'start': start_iso,
                         'title': base_title,
-                        'cancelled': is_ausfall,
+                        'cancelled': is_cancelled,
                     })
                     new_hashes[u_id] = {'hash': current_hash, 'google_id': created['id'], 'date': fmt_date,
-                                        'summary': titel, 'fields': fields}
+                                        'summary': title, 'fields': fields}
 
-                time.sleep(0.2)  # für google api, sonst timeout
+                time.sleep(0.2)  # for the google api, otherwise timeout
 
-        # ids in google einträgen löschen, damit die für das programm unsichtbar werden, falls sie auch aus den hashes gelöscht werden nach 3 tagen
-        heute_str = date.today().isoformat()
+        # remove the ids from the google events, so that they become invisible to the program in case they are also removed from the hashes after 3 days
+        today_str = date.today().isoformat()
         for u_id, data in local_hashes.items():
             g_id = data.get('google_id')
             old_fields = data.get('fields') or {}
-            if data['date'] < heute_str:
-                # Historie bewahren, nicht löschen
+            if data['date'] < today_str:
+                # keep the history, do not delete
                 try:
                     event = service.events().get(calendarId=config.CALENDAR_ID, eventId=g_id).execute()
-                    new_desc = event.get('description', '').split('\n\nUntis-Sync-ID:')[0] + "\n\nStunde vergangen"
+                    new_desc = event.get('description', '').split('\n\nUntis-Sync-ID:')[0] + "\n\n" + t('lesson_over')
                     service.events().patch(calendarId=config.CALENDAR_ID, eventId=g_id, body={'description': new_desc}).execute()
                 except:
                     pass
             else:
-                # Zukünftiges löschen, falls aktualisirt (nur das zählt als "gelöscht")
+                # delete future ones, if they changed (only this counts as "deleted")
                 try:
                     service.events().delete(calendarId=config.CALENDAR_ID, eventId=g_id).execute()
                     c_del += 1
@@ -607,24 +606,24 @@ def sync():
                         'title': old_fields.get('title') or data.get('summary', ''),
                     })
                 except Exception as del_e:
-                    logging.warning(f"Löschen von {g_id} fehlgeschlagen: {del_e}")
+                    logging.warning(f"Deleting {g_id} failed: {del_e}")
 
         save_hashes(new_hashes)
         counts = {'new': c_new, 'updated': c_upd, 'skipped': c_skip, 'deleted': c_del, 'silent': c_silent}
         notifications.send_update_notification(counts, change_log)
-        logging.info(f"Fertig! Neu: {c_new}, Updates: {c_upd}, Unverändert: {c_skip}, Gelöscht: {c_del}, Still aktualisiert: {c_silent}")
+        logging.info(f"Done! New: {c_new}, updated: {c_upd}, unchanged: {c_skip}, deleted: {c_del}, silently updated: {c_silent}")
         log_separator()
         return True
 
     except auth.GoogleAuthError as e:
-        logging.error(f"Google-Anmeldung: {e}")
+        logging.error(f"Google login: {e}")
         notify_auth_error_once(str(e))
         log_separator()
         return False
 
     except Exception as e:
-        logging.error(f"Fehler im Sync: {e}", exc_info=True)
-        notifications.send_error_notification(f"Sync Fehler: {str(e)}")
+        logging.error(f"Error in sync: {e}", exc_info=True)
+        notifications.send_error_notification(t('sync_error', error=str(e)))
         log_separator()
         return False
 
@@ -632,4 +631,4 @@ def sync():
 if __name__ == "__main__":
     cleanup_old_logs(days=7)
     ok = sync()
-    sys.exit(0 if ok else 3)  # 3 = Fehler wurde bereits gemeldet (siehe run_loop.py)
+    sys.exit(0 if ok else 3)  # 3 = error was already reported (see run_loop.py)
