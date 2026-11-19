@@ -89,6 +89,9 @@ def require(*names):
 DATA_DIR = str(Path(_get("DATA_DIR", str(BASE_DIR))).expanduser())
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Saved hashes of the synced events. The German file name is kept, so that existing installations keep working.
+HASH_FILE = os.path.join(DATA_DIR, "gespeicherte_hashes.json")
+
 
 # ----------------------------------------------------------------------------------------------------
 # Language of everything the calendar and the push notifications show (texts.py).
