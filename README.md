@@ -160,7 +160,7 @@ them (`process_positions` in `get_week_and_lesson_information.py`) needs to be e
 
 A lesson counts as cancelled (grey, struck through) when WebUntis marks it as cancelled. Some schools do not do that, they write a
 phrase like "work on your own" into the info or substitution text instead. Put such phrases into `CANCEL_KEYWORDS`
-(comma separated, not case sensitive), e.g. `CANCEL_KEYWORDS=self-study,room free`. The default is the phrase of the author's German school.
+(comma separated, not case sensitive), e.g. `CANCEL_KEYWORDS=self-study,room free`. The default is the phrase of my German school.
 
 ### Language
 

@@ -118,7 +118,7 @@ def run_device_flow(force=False):
         if error == "invalid_client":
             print("→ Check the client ID. The client must be of type 'TVs and Limited Input devices'.")
         elif error == "invalid_scope":
-            print("→ Google does not allow calendar access with this flow (please report this to the developer).")
+            print("→ Google does not allow calendar access with this flow (please open an issue on GitHub: https://github.com/MyName-99a/untis-google-calendar-sync/issues).")
         sys.exit(1)
 
     url = data.get("verification_url") or data.get("verification_uri") or "https://www.google.com/device"
