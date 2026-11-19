@@ -28,7 +28,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
-TOKEN_PATH = os.path.join(config.DATA_DIR, '000_Archive/005_Unused-Files-After-Dockerfication/token.json')
+TOKEN_PATH = os.path.join(config.DATA_DIR, 'token.json')
 
 
 class GoogleAuthError(Exception):

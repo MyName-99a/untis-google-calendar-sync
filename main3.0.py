@@ -21,7 +21,7 @@ import changes
 # pfade und so (alles liegt im Datenordner, ohne Angabe ist das der Projektordner)
 DATA_DIR = config.DATA_DIR
 HASH_FILE = os.path.join(DATA_DIR, 'gespeicherte_hashes.json')
-LOG_FILE = os.path.join(DATA_DIR, '000_Archive/005_Unused-Files-After-Dockerfication/sync_log.txt')
+LOG_FILE = os.path.join(DATA_DIR, 'sync_log.txt')
 
 # Merker-Datei, damit die Meldung "Google-Anmeldung ungültig" nicht alle paar Minuten kommt
 AUTH_ERROR_MARKER = os.path.join(DATA_DIR, '.google_auth_error_gemeldet')
