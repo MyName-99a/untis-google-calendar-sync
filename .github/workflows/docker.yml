@@ -42,6 +42,8 @@ jobs:
           docker run --rm \
             -e UNTIS_SERVER=example.webuntis.com -e UNTIS_USER=test -e UNTIS_PASSWORD=test \
             untis-sync:test sh -c "
+              ! grep -rn 000_Archive /app &&
+              python -c 'import auth; assert auth.TOKEN_PATH == \"/data/token.json\", auth.TOKEN_PATH' &&
               python -m py_compile main3.0.py get_week_and_lesson_information.py &&
               python -c 'import config, auth, changes, notifications' &&
               python changes.py > /dev/null &&
