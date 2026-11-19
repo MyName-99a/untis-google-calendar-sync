@@ -1,5 +1,28 @@
+# Zugangsdaten und lokale Daten (niemals einchecken)
+.env
+data/
+token.json*
 credentials.json
-token.json
 login.py
-gespeicherte_hashes.json
+gespeicherte_hashes*.json
 sync_log.txt
+health.json
+.google_auth_error_gemeldet
+fach_map.json
+
+# Python und Editoren
+.venv/
+venv/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+# Eigene Arbeitsordner und Tests
+000_Archive/
+000_Test/
+000_Tests/
+001_Untis-Sync-Cleanup/
+fake_sync.py
+dump/
+*.bak*
