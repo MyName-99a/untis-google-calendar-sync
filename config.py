@@ -129,6 +129,16 @@ UNTIS_SERVER = _clean_server(_get("UNTIS_SERVER"))
 UNTIS_USER = _get("UNTIS_USER")
 UNTIS_PASSWORD = os.environ.get("UNTIS_PASSWORD", "")  # deliberately not stripped, passwords may contain spaces
 
+# How the program logs in (untis_login.py): "http" = plain HTTP requests (default, fast, no browser needed),
+# "browser" = headless Chromium via Playwright (fallback, if "http" does not work for your school)
+UNTIS_LOGIN = _get("UNTIS_LOGIN", "http").lower()
+if UNTIS_LOGIN not in ("http", "browser"):
+    _warn(f"UNTIS_LOGIN={UNTIS_LOGIN!r} is not supported (use http or browser), using 'http'.")
+    UNTIS_LOGIN = "http"
+
+# Login name of the school. Only needed if the program cannot find it itself (the error message says so).
+UNTIS_SCHOOL = _get("UNTIS_SCHOOL")
+
 
 # ----------------------------------------------------------------------------------------------------
 # Calendar and time range

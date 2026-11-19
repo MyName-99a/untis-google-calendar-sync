@@ -74,6 +74,7 @@ TEXTS = {
         'error_title': "Sync error",
         'sync_error': "Sync error: {error}",
         'auth_invalid': "Google login invalid: {error}",
+        'login_invalid': "WebUntis login failed: {error}",
         'crash_notice': "The sync program keeps crashing ({reason}). Please check the log: docker compose logs untis-sync",
     },
 
@@ -128,6 +129,7 @@ TEXTS = {
         'error_title': "Error-Sync",
         'sync_error': "Sync Fehler: {error}",
         'auth_invalid': "Google-Anmeldung ungültig: {error}",
+        'login_invalid': "WebUntis-Anmeldung fehlgeschlagen: {error}",
         'crash_notice': "Das Sync-Programm bricht wiederholt ab ({reason}). Bitte das Log prüfen: docker compose logs untis-sync",
     },
 }

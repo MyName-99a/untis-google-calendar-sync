@@ -20,7 +20,7 @@ Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, .
 - Calendar and notification texts in English or German (`LANGUAGE=en|de`)
 - Configurable schedule (every X minutes inside a time window and/or at fixed times), healthcheck, custom subject names
 
-> Unofficial project, not affiliated with Untis GmbH or Google. It logs in to WebUntis like your browser does.
+> Unofficial project, not affiliated with Untis GmbH or Google. It logs in to WebUntis like your browser's login page does.
 > Use it at your own risk, check your school's rules, and keep the interval polite
 > (every run asks WebUntis for every lesson of the coming weeks, so 15 minutes or more is recommended).
 
@@ -100,6 +100,8 @@ All settings are environment variables in `.env`.
 |---|---|---|
 | `UNTIS_SERVER` | | School address, e.g. `your-school.webuntis.com` |
 | `UNTIS_USER`, `UNTIS_PASSWORD` | | WebUntis login |
+| `UNTIS_LOGIN` | `http` | `http` = plain HTTP requests (fast, no browser). `browser` = headless Chromium, a fallback if `http` does not work for your school |
+| `UNTIS_SCHOOL` | | Login name of the school. Only needed if the program says it cannot find it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | OAuth client of type "TVs and Limited Input devices" |
 | `CALENDAR_ID` | `primary` | Target calendar (`primary` = main calendar) |
 | `LANGUAGE` | `en` | Language of the calendar events and push notifications: `en` or `de`. Logs are always English |
@@ -227,7 +229,7 @@ Without Docker (Python 3.10+):
 ```bash
 python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
-playwright install --with-deps chromium    # installs a browser, --with-deps needs sudo on Linux
+playwright install --with-deps chromium    # only for UNTIS_LOGIN=browser, --with-deps needs sudo on Linux
 cp .env.example .env                       # and fill it in
 python auth.py                             # sign in to Google once
 python run_loop.py
@@ -244,7 +246,7 @@ python run_loop.py
 | `Permission denied` in `/data` | Create `data` yourself and set `PUID`/`PGID` to your `id -u` / `id -g` |
 | WebUntis password contains `$` | Put it in single quotes in `.env`: `UNTIS_PASSWORD='...'` |
 | Container is `unhealthy` | Three runs in a row failed, or the loop is stuck. See `docker compose logs --tail 100 untis-sync` and `data/sync_log.txt` |
-| Login to WebUntis fails | Check server, user and password. Single sign-on schools are not supported |
+| Login to WebUntis fails | Check server, user and password (test them on the website). Single sign-on schools are not supported. After a failed login the program waits 30 minutes before it tries again, so your account is not locked. A changed `.env` ends the wait at once. If your school needs something else, try `UNTIS_LOGIN=browser` |
 | Events are duplicated or the calendar is messy | `docker compose stop`, then `python cleanup.py --duplicates --delete`, or start over with `--delete`. See [Clean up and uninstall](#clean-up-and-uninstall) |
 | Wrong, missing or German subject names | Add them to `data/fach_map.json`. For a non-German school also set `FACH_MAP_USE_DEFAULTS=false` |
 
