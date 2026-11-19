@@ -20,9 +20,9 @@ from texts import t
 # https://emojidb.org/house-emojis?utm_source=user_search - the emojis are from here, good site
 
 # Paths (everything lives in the data folder, without a setting that is the project folder).
-# The file names are German for historical reasons and kept, so that existing installations keep working.
+# The file names are German for historical reasons and kept, so that existing installations keep working (see config.HASH_FILE).
 DATA_DIR = config.DATA_DIR
-HASH_FILE = os.path.join(DATA_DIR, 'gespeicherte_hashes.json')
+HASH_FILE = config.HASH_FILE
 LOG_FILE = os.path.join(DATA_DIR, 'sync_log.txt')
 
 # Marker file, so that the "Google login invalid" message does not come every few minutes

@@ -174,6 +174,37 @@ Install the ntfy app, subscribe to a hard-to-guess topic name and put it into `N
 that contains changes, with a line per change (`+` added, `−` removed, `~` changed). Important changes
 (cancellations, exams, room, teacher, homework) have high priority.
 
+## Clean up and uninstall
+
+`cleanup.py` removes the events the sync created, for example to start over, to remove duplicates, or when you do not want to use
+the sync any more. It only touches events that were created by this program (recognized by the `Untis-Sync-ID` line in future
+events and by the closing line of finished lessons), nothing else in your calendar. Without options it only shows what it would delete.
+
+```bash
+docker compose stop                                              # so the sync cannot recreate events meanwhile
+docker compose run --rm untis-sync python cleanup.py             # dry run: shows what would be deleted
+docker compose run --rm untis-sync python cleanup.py --delete    # deletes the future events (asks first)
+docker compose start
+```
+
+| Option | Meaning |
+|---|---|
+| `--duplicates` | Only duplicates (the same lesson more than once), one event per lesson is kept |
+| `--weeks N` | Look N weeks ahead (default 52) |
+| `--past-days N` | Also look N days into the past |
+| `--all` | Every event the sync ever created, past and future, and the saved hashes are reset |
+| `--yes` | No confirmation prompt (needed without a terminal) |
+
+To remove everything and stop using the sync:
+
+```bash
+docker compose stop
+docker compose run --rm untis-sync python cleanup.py --all --delete
+docker compose down
+```
+
+Then delete the project folder (including `data/`), and revoke the access at <https://myaccount.google.com/permissions>.
+
 ## Update
 
 ```bash
@@ -214,6 +245,7 @@ python run_loop.py
 | WebUntis password contains `$` | Put it in single quotes in `.env`: `UNTIS_PASSWORD='...'` |
 | Container is `unhealthy` | Three runs in a row failed, or the loop is stuck. See `docker compose logs --tail 100 untis-sync` and `data/sync_log.txt` |
 | Login to WebUntis fails | Check server, user and password. Single sign-on schools are not supported |
+| Events are duplicated or the calendar is messy | `docker compose stop`, then `python cleanup.py --duplicates --delete`, or start over with `--delete`. See [Clean up and uninstall](#clean-up-and-uninstall) |
 | Wrong, missing or German subject names | Add them to `data/fach_map.json`. For a non-German school also set `FACH_MAP_USE_DEFAULTS=false` |
 
 ## Notes
