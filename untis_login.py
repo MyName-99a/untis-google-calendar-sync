@@ -1,13 +1,8 @@
 """
-Login to WebUntis. Two ways, selected with UNTIS_LOGIN in .env:
+Login to WebUntis with plain HTTP requests, the same ones the login page of WebUntis sends. It takes about
+a second and needs no browser.
 
-  http     (default)  Plain HTTP requests, the same ones the login page of WebUntis sends. Fast (about one second),
-                      needs no browser and very little memory.
-  browser             Starts a headless Chromium (Playwright), fills in the login page and reads the Bearer token
-                      from its requests. Slow and memory hungry, but it behaves exactly like a person. Use it if
-                      "http" does not work for your school.
-
-Both classes offer the same small interface to get_week_and_lesson_information.py:
+The class offers this small interface to get_week_and_lesson_information.py:
 
     auth.bearer()        value for the Authorization header ("Bearer ...")
     auth.tenant_id       value for the Tenant-Id header
@@ -15,7 +10,7 @@ Both classes offer the same small interface to get_week_and_lesson_information.p
     auth.session_lost(response)      True if WebUntis answers like "you are not logged in"
     auth.login()         log in again
 
-After a failed http login the program pauses for LOGIN_PAUSE_MINUTES before it tries again, so a wrong password
+After a failed login the program pauses for LOGIN_PAUSE_MINUTES before it tries again, so a wrong password
 cannot lock your account by being tried every few minutes. A changed password or user ends the pause at once.
 """
 
@@ -97,7 +92,7 @@ def _clear_pause():
 
 
 # ----------------------------------------------------------------------------------------------------
-# Login with plain HTTP requests
+# The login
 # ----------------------------------------------------------------------------------------------------
 
 class HttpAuth:
@@ -194,7 +189,7 @@ class HttpAuth:
             _set_pause()
             raise UntisLoginError(
                 "WebUntis did not accept the login. Check UNTIS_USER and UNTIS_PASSWORD (try them on the website). "
-                "Schools with single sign-on are not supported with UNTIS_LOGIN=http, a captcha or a temporary "
+                "Schools with single sign-on are not supported. A captcha or a temporary "
                 f"lockout also causes this. The next attempt is made in {LOGIN_PAUSE_MINUTES} minutes.")
         _clear_pause()
 
@@ -213,62 +208,6 @@ class HttpAuth:
         return response.status_code in (302, 401)
 
 
-# ----------------------------------------------------------------------------------------------------
-# Login with a browser (Playwright)
-# ----------------------------------------------------------------------------------------------------
-
-class BrowserAuth:
-    def __init__(self):
-        self.cookies = {}
-        self.token = None
-        self.tenant_id = ""
-        self.login()
-
-    def login(self):
-        from playwright.sync_api import sync_playwright   # only needed (and installed) for this mode
-
-        logging.info("Logging in to WebUntis (browser)")
-        seen = {"bearer": None}
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
-
-            def intercept_headers(request):
-                headers = request.headers
-                if "authorization" in headers and "Bearer" in headers["authorization"]:
-                    seen["bearer"] = headers["authorization"]
-
-            page.on("request", intercept_headers)
-            page.goto(f"{origin()}/WebUntis")
-            page.locator('input[type="text"]').fill(config.UNTIS_USER)
-            page.locator('input[type="password"]').fill(config.UNTIS_PASSWORD)
-            page.locator('button[type="submit"], input[type="submit"]').click()
-            page.wait_for_load_state("networkidle")
-
-            self.cookies = {c["name"]: c["value"] for c in context.cookies()}
-            if not seen["bearer"]:
-                page.wait_for_timeout(3000)
-            browser.close()
-
-        self.token = seen["bearer"]
-        if not self.token:
-            raise UntisLoginError("Browser login: no Bearer token was seen. Check UNTIS_USER and UNTIS_PASSWORD.")
-        # without the quotes, the header needs the plain value
-        self.tenant_id = (self.cookies.get("Tenant-Id") or "").replace('"', '')
-
-    def bearer(self):
-        return self.token
-
-    def get(self, url, params=None, headers=None):
-        return requests.get(url, params=params, cookies=self.cookies, headers=headers,
-                            allow_redirects=False, timeout=REQUEST_TIMEOUT)
-
-    @staticmethod
-    def session_lost(response):
-        return response.status_code in (302, 401)
-
-
 def create():
-    """Logs in with the method from UNTIS_LOGIN and returns the auth object."""
-    return BrowserAuth() if config.UNTIS_LOGIN == "browser" else HttpAuth()
+    """Logs in and returns the auth object."""
+    return HttpAuth()

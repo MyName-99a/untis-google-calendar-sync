@@ -3,8 +3,7 @@ services:
     image: ghcr.io/myname-99a/untis-google-calendar-sync:latest
     container_name: untis-sync
     restart: unless-stopped
-    init: true          # stops Chromium processes cleanly
-    ipc: host           # recommended by Playwright for Chromium (prevents crashes)
+    init: true          # clean shutdown, no leftover processes
     # The files in ./data belong to this user (Linux: "id -u" and "id -g")
     user: "${PUID:-1000}:${PGID:-1000}"
     env_file: .env

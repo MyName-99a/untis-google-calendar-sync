@@ -100,7 +100,6 @@ All settings are environment variables in `.env`.
 |---|---|---|
 | `UNTIS_SERVER` | | School address, e.g. `your-school.webuntis.com` |
 | `UNTIS_USER`, `UNTIS_PASSWORD` | | WebUntis login |
-| `UNTIS_LOGIN` | `http` | `http` = plain HTTP requests (fast, no browser). `browser` = headless Chromium, a fallback if `http` does not work for your school |
 | `UNTIS_SCHOOL` | | Login name of the school. Only needed if the program says it cannot find it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | OAuth client of type "TVs and Limited Input devices" |
 | `CALENDAR_ID` | `primary` | Target calendar (`primary` = main calendar) |
@@ -233,7 +232,6 @@ Without Docker (Python 3.10+):
 ```bash
 python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
-playwright install --with-deps chromium    # only for UNTIS_LOGIN=browser, --with-deps needs sudo on Linux
 cp .env.example .env                       # and fill it in
 python auth.py                             # sign in to Google once
 python run_loop.py
@@ -250,7 +248,7 @@ python run_loop.py
 | `Permission denied` in `/data` | Create `data` yourself and set `PUID`/`PGID` to your `id -u` / `id -g` |
 | WebUntis password contains `$` | Put it in single quotes in `.env`: `UNTIS_PASSWORD='...'` |
 | Container is `unhealthy` | Three runs in a row failed, or the loop is stuck. See `docker compose logs --tail 100 untis-sync` and `data/sync_log.txt` |
-| Login to WebUntis fails | Check server, user and password (test them on the website). Single sign-on schools are not supported. After a failed login the program waits 30 minutes before it tries again, so your account is not locked. A changed `.env` ends the wait at once. If your school needs something else, try `UNTIS_LOGIN=browser` |
+| Login to WebUntis fails | Check server, user and password (test them on the website). Single sign-on schools are not supported. After a failed login the program waits 30 minutes before it tries again, so your account is not locked. A changed `.env` ends the wait at once. If the login never works for your school, the image `ghcr.io/myname-99a/untis-google-calendar-sync:1.3` still logs in with a browser (`UNTIS_LOGIN=browser`). Please open an issue |
 | Events are duplicated or the calendar is messy | `docker compose stop`, then `python cleanup.py --duplicates --delete`, or start over with `--delete`. See [Clean up and uninstall](#clean-up-and-uninstall) |
 | Wrong, missing or German subject names | Add them to `data/fach_map.json`. For a non-German school also set `FACH_MAP_USE_DEFAULTS=false` |
 

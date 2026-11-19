@@ -227,7 +227,7 @@ def healthcheck():
 def _signal_process(proc, sig):
     try:
         if hasattr(os, "killpg"):
-            os.killpg(proc.pid, sig)   # whole process group, so that Chromium is stopped too
+            os.killpg(proc.pid, sig)   # whole process group, so that nothing is left behind
         else:
             proc.terminate()
     except ProcessLookupError:
