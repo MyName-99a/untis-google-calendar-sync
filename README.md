@@ -37,15 +37,20 @@ Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, .
 You need your **own** Google Cloud project. The calendar permission is a "sensitive scope", so a shared project
 would be limited and unverified. With your own project nobody else is involved.
 
-1. Open <https://console.cloud.google.com> and create a project. Select it.
-2. Search for **Google Calendar API** and **enable** it.
-3. Open the **OAuth consent screen** (Google Auth Platform). Choose user type **External**, enter an app name and your email.
-4. **Publish the app** (status **"In production"**, under *Audience*). Do this **before** signing in:
-   in "Testing" status Google invalidates the login after 7 days. You can skip any verification request,
-   it is not needed for personal use.
-5. Create an **OAuth client** (Credentials / Clients). The application type must be
+1. Open <https://console.cloud.google.com> and create a project. Give it a name and select it.
+2. In the left menu open **APIs & Services**, then **Library**. Search for **Google Calendar API**, open it and click **Enable**.
+3. Open the **OAuth consent screen** (now called **Google Auth Platform**). If you see **Get started**, click it and follow the first steps: enter an app name and your email, choose the audience **External**, add your email as contact and accept the terms.
+4. Open **Branding** in the left menu and fill in the app links (Google may require them before you can publish the app):
+   - **Application home page**
+   - **Application privacy policy link**
+   - **Application terms of service link**
+
+   For personal use these can point to any public page (or this repo). If the console asks for more (for example **Authorized domains** for the links you entered), follow its hints.
+5. Open **Audience** in the left menu and click **Publish app**. The status must change from "Testing" to **"In production"**. Do this **before** you sign in:
+   in "Testing" status Google invalidates the login after 7 days. If Google offers a verification, you can skip it, it is not needed for personal use.
+6. Open **Clients** in the left menu and click **Create client**. The application type must be
    **"TVs and Limited Input devices"** (not "Desktop app"). Copy the **Client ID** and the **Client secret** right away,
-   Google may not show the secret again later.
+   Google may not show the secret again later. You will enter both into `.env` in step 2 below.
 
 ### 2. Set up the folder
 
@@ -61,7 +66,7 @@ Create the `data` folder yourself. If Docker creates it, it belongs to root and 
 Edit `.env` and fill in at least `UNTIS_SERVER`, `UNTIS_USER`, `UNTIS_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 and `TZ`. On Linux set `PUID` and `PGID` to the output of `id -u` and `id -g`.
 
-**Tip:** Try it with a separate test calendar first. Create one in Google Calendar and put its ID into `CALENDAR_ID`.
+**Tip:** If you like to try it with a separate test calendar first. Create one in Google Calendar and put its ID into `CALENDAR_ID`. Otherwise use `primary`. Also: `.env` starts with a dot, so `ls` does not show it. Use `ls -a` to see it and `nano .env` to edit it.
 
 ### 3. Sign in to Google (once)
 
