@@ -1,11 +1,10 @@
 import logging
+from datetime import datetime, timedelta
 
 import config
-import requests
 import texts
-from pprint import pprint
-from datetime import datetime, timedelta
-from playwright.sync_api import sync_playwright
+import untis_login
+from untis_login import UntisLoginError   # noqa: F401  (main3.0.py catches it as untis_api.UntisLoginError)
 
 #
 # ----------------------------------------------------------------------------------------------------
@@ -15,169 +14,107 @@ today = datetime.today().strftime('%Y-%m-%d')
 current_week_monday = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime('%Y-%m-%d')
 current_week_friday = (datetime.now() - timedelta(days=datetime.now().weekday()) + timedelta(days=4)).strftime('%Y-%m-%d')
 
-base_url = config.UNTIS_SERVER
-username = config.UNTIS_USER
-password = config.UNTIS_PASSWORD
 config.require("UNTIS_SERVER", "UNTIS_USER", "UNTIS_PASSWORD")
+
+# Filled by _ensure_ready() when the first data is requested (not when this file is imported),
+# so a failed login is reported by the sync like every other error.
+_auth = None
+school_year_id = None
+student_id = None
 
 #
 # ----------------------------------------------------------------------------------------------------
 #
 
-def get_cookies_and_bearer_token():
-    auth_data = {"cookies": {}, "bearer_token": None}
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
+BASE_HEADERS = {
+    'accept': 'application/json, text/plain, */*',
+    'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+    'priority': 'u=1, i',
+    'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'user-agent': untis_login.USER_AGENT,
+}
 
-        def intercept_headers(request):
-            headers = request.headers
-            if "authorization" in headers and "Bearer" in headers["authorization"]:
-                auth_data["bearer_token"] = headers["authorization"]
 
-        page.on("request", intercept_headers)
-        page.goto(f"https://{base_url}/WebUntis")
-        page.locator('input[type="text"]').fill(username)
-        page.locator('input[type="password"]').fill(password)
-        page.locator('button[type="submit"], input[type="submit"]').click()
-        page.wait_for_load_state("networkidle")
+def _get(path, params=None, referer="/", with_context=True):
+    """
+    GET request to WebUntis with the login of the session. If WebUntis says the session has ended,
+    the program logs in again and repeats the request once.
+    with_context=False leaves out the Tenant-Id and school year headers (not needed to find the school year).
+    """
+    url = f"{untis_login.origin()}{path}"
+    for attempt in (1, 2):
+        headers = dict(BASE_HEADERS)
+        headers['authorization'] = _auth.bearer()
+        headers['referer'] = f"{untis_login.origin()}{referer}"
+        if with_context:
+            headers['tenant-id'] = _auth.tenant_id
+            headers['x-webuntis-api-school-year-id'] = str(school_year_id)
 
-        cookies_list = context.cookies()
-        auth_data["cookies"] = {c['name']: c['value'] for c in cookies_list}
-        if not auth_data["bearer_token"]:
-            page.wait_for_timeout(3000)
-        browser.close()
+        response = _auth.get(url, params, headers)
+        if attempt == 1 and _auth.session_lost(response):
+            logging.warning(f"WebUntis answered {response.status_code} for {path}, logging in again")
+            _auth.login()
+            continue
+        return response
 
-        schoolname1 = auth_data["cookies"].get("schoolname")
-        tenantid1 = auth_data["cookies"].get("Tenant-Id")
-        traceid1 = auth_data["cookies"].get("traceId")
-        jsessionid1 = auth_data["cookies"].get("JSESSIONID")
-        sleek_session1 = auth_data["cookies"].get("_sleek_session")
-        sleek_product1 = auth_data["cookies"].get("_sleek_product")
-        bearer_token1 = auth_data.get("bearer_token")
 
-        return (
-            schoolname1, tenantid1, traceid1, jsessionid1,
-            sleek_session1, sleek_product1, bearer_token1
-        )
-schoolname, tenant_id, traceid, jsessionid, sleek_session, sleek_product, bearer_token = get_cookies_and_bearer_token()
-# Without the quotes, because the 'headers' below need the value without them
-# (this used to be tenant_id[0], which was only the first character and therefore always empty)
-tenant_id_splited = tenant_id.replace('"', '') if tenant_id else ""
+def _ensure_ready():
+    """Logs in once and reads the school year and the student ID (the first call of the sync does it)."""
+    global _auth, school_year_id, student_id
+    if _auth is not None:
+        return
+    auth = untis_login.create()
+    _auth = auth
+    try:
+        school_year_id = get_school_year()
+        student_id = get_student_id()
+        if not school_year_id or not student_id:
+            raise RuntimeError("WebUntis did not deliver the school year or the student ID "
+                               f"(school year: {bool(school_year_id)}, student: {bool(student_id)})")
+    except Exception:
+        _auth = None      # the next call starts from the beginning
+        raise
 
 #
 # ----------------------------------------------------------------------------------------------------
 #
 
 def get_school_year():
-    cookies = {
-        'schoolname': f'{schoolname}',
-        'Tenant-Id': f'{tenant_id}',
-        'traceId': f'{traceid}',
-        'JSESSIONID': f'{jsessionid}',
-        '_sleek_session': f'{sleek_session}',
-        '_sleek_product': f'{sleek_product}',
-    }
+    response = _get('/WebUntis/api/rest/view/v1/schoolyears',
+                    referer=f'/timetable/my-student?date={current_week_monday}', with_context=False)
+    if response.status_code != 200:
+        return False
+    years = response.json()
+    if not years:
+        return False
+    for year in years:    # the school year that contains today, otherwise the first one (as before)
+        date_range = year.get('dateRange') or {}
+        if date_range.get('start') and date_range.get('end') and date_range['start'] <= today <= date_range['end']:
+            return year.get('id')
+    return years[0].get('id')
 
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'authorization': f'{bearer_token}',
-        'priority': 'u=1, i',
-        'referer': f'https://{base_url}/timetable/my-student?date={current_week_monday}',
-        'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-    }
-
-    response = requests.get(
-        f'https://{base_url}/WebUntis/api/rest/view/v1/schoolyears',
-        cookies=cookies,
-        headers=headers,
-    )
-
-    return response.json()[0].get('id') if response.status_code == 200 and response.json() else False
-school_year_id = get_school_year()
 
 def get_student_id():
-    cookies = {
-        'schoolname': f'{schoolname}',
-        'Tenant-Id': f'{tenant_id}',
-        'traceId': f'{traceid}',
-        'JSESSIONID': f'{jsessionid}',
-        '_sleek_session': f'{sleek_session}',
-        '_sleek_product': f'{sleek_product}',
-    }
-
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'authorization': f'{bearer_token}',
-        'priority': 'u=1, i',
-        'referer': f'https://{base_url}/timetable/my-student',
-        'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'tenant-id': f'{tenant_id_splited}',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-        'x-webuntis-api-school-year-id': f'{school_year_id}',
-    }
-
     params = {
         'resourceType': 'STUDENT',
         'timetableType': 'MY_TIMETABLE',
         'start': f'{current_week_monday}',
         'end': f'{current_week_friday}',
     }
-
-    response = requests.get(
-        f'https://{base_url}/WebUntis/api/rest/view/v1/timetable/filter',
-        params=params,
-        cookies=cookies,
-        headers=headers,
-    )
-
+    response = _get('/WebUntis/api/rest/view/v1/timetable/filter', params, referer='/timetable/my-student')
     return response.json().get('preSelected', {}).get('id') if response.status_code == 200 else False
-student_id = get_student_id()
 
 #
 # ----------------------------------------------------------------------------------------------------
 #
 
 def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
-    cookies = {
-        'schoolname': f'{schoolname}',
-        'Tenant-Id': f'{tenant_id}',
-        'traceId': f'{traceid}',
-        'JSESSIONID': f'{jsessionid}',
-        '_sleek_session': f'{sleek_session}',
-        '_sleek_product': f'{sleek_product}',
-    }
-
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'authorization': f'{bearer_token}',
-        'priority': 'u=1, i',
-        'referer': f'https://{base_url}/timetable/my-student?date={start_date_of_week_iso}',
-        'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'tenant-Id': f'{tenant_id}',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-        'x-webuntis-api-school-year-id': f'{school_year_id}',
-    }
+    _ensure_ready()
 
     params = {
         'start': f'{start_date_of_week_iso}',
@@ -190,12 +127,11 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
         'layout': 'START_TIME',
     }
 
-    response = requests.get(
-        f'https://{base_url}/WebUntis/api/rest/view/v1/timetable/entries',
-        params=params,
-        cookies=cookies,
-        headers=headers,
-    )
+    response = _get('/WebUntis/api/rest/view/v1/timetable/entries', params,
+                    referer=f'/timetable/my-student?date={start_date_of_week_iso}')
+    if response.status_code != 200:
+        # without this check an error page would look like "no lessons" and the sync would delete the events
+        raise RuntimeError(f"WebUntis timetable request failed with HTTP {response.status_code}")
 
     week_entries = []
     # 1. helper function to find the positions (the values can change, so the type could be anything)
@@ -275,31 +211,7 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
         "exam": {"name": ..., "description": ..., "type_long_name": ...} or None
     }
     """
-    cookies = {
-        'schoolname': f'{schoolname}',
-        'Tenant-Id': f'{tenant_id}',
-        'traceId': f'{traceid}',
-        'JSESSIONID': f'{jsessionid}',
-        '_sleek_session': f'{sleek_session}',
-        '_sleek_product': f'{sleek_product}',
-    }
-
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'de,de-DE;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'authorization': f'{bearer_token}',
-        'priority': 'u=1, i',
-        'referer': f'https://{base_url}/timetable/my-student/lessonDetails/{id_der_stunde}/{student_id}/5/{start_zeit_in_iso}/{end_zeit_in_iso}/true?date={current_week_monday}&entityId={student_id}',  # /5/ stands for student
-        'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'tenant-id': f'{tenant_id_splited}',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
-        'x-webuntis-api-school-year-id': f'{school_year_id}',
-    }
+    _ensure_ready()
 
     params = {
         'elementId': f'{student_id}',
@@ -309,12 +221,9 @@ def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
         'startDateTime': f'{start_zeit_in_iso}',
     }
 
-    response = requests.get(
-        f'https://{base_url}/WebUntis/api/rest/view/v2/calendar-entry/detail',
-        params=params,
-        cookies=cookies,
-        headers=headers,
-    )
+    # /5/ in the referer stands for student
+    response = _get('/WebUntis/api/rest/view/v2/calendar-entry/detail', params,
+                    referer=f'/timetable/my-student/lessonDetails/{id_der_stunde}/{student_id}/5/{start_zeit_in_iso}/{end_zeit_in_iso}/true?date={current_week_monday}&entityId={student_id}')
 
     result = {"homeworks": [], "teaching_content": None, "exam": None}
 

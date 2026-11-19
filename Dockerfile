@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Only the program files, deliberately no credentials
-COPY config.py texts.py auth.py changes.py notifications.py get_week_and_lesson_information.py main3.0.py run_loop.py cleanup.py ./
+COPY config.py texts.py auth.py changes.py notifications.py untis_login.py get_week_and_lesson_information.py main3.0.py run_loop.py cleanup.py ./
 
 RUN mkdir -p /data
 VOLUME /data
