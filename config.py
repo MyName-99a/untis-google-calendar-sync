@@ -181,7 +181,7 @@ NTFY_URL = f"{NTFY_SERVER}/{NTFY_TOPIC}" if NTFY_TOPIC else None
 # Cancelled lessons: besides the status CANCELLED, a lesson also counts as cancelled when one of its info
 # texts (info, text, notes, substitution) contains one of these phrases (comma separated, not case
 # sensitive). Some schools do not mark a cancelled lesson as cancelled but write a phrase like this
-# into the substitution text. The default is the phrase of the author's (German) school.
+# into the substitution text. The default is the phrase of my German school.
 # ----------------------------------------------------------------------------------------------------
 
 CANCEL_KEYWORDS = [

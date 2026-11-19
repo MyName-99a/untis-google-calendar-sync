@@ -8,6 +8,7 @@ from datetime import datetime, date, timedelta
 
 # Google API imports
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # Own files
 import config
@@ -164,6 +165,11 @@ def notify_auth_error_once(message, every_hours=24):
             f.write(datetime.now().isoformat())
     except Exception as e:
         logging.warning(f"Auth notification could not be sent: {e}")
+
+
+def http_status(error):
+    # HTTP status of a Google API error (404 = not found, 410 = gone)
+    return getattr(error, 'status_code', None) or getattr(getattr(error, 'resp', None), 'status', None)
 
 
 def format_untis_time(untis_date_val, untis_time_val):
@@ -545,7 +551,14 @@ def sync():
                             # Event unchanged, only gets the snapshot added (once, after the switch)
                             new_hashes[u_id]['fields'] = fields
                     else:
-                        service.events().patch(calendarId=config.CALENDAR_ID, eventId=g_id, body=event_body).execute()
+                        try:
+                            service.events().patch(calendarId=config.CALENDAR_ID, eventId=g_id, body=event_body).execute()
+                        except HttpError as patch_error:
+                            if http_status(patch_error) not in (404, 410):
+                                raise
+                            # the event was deleted in the calendar (e.g. by hand): create it again
+                            logging.warning(f"Event {g_id} no longer exists in the calendar, creating it again: {title}")
+                            g_id = service.events().insert(calendarId=config.CALENDAR_ID, body=event_body).execute()['id']
 
                         # what exactly changed? (without an old snapshot no comparison is possible)
                         diff = changes.diff_fields(old_fields, fields) if old_fields else []
