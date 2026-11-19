@@ -76,6 +76,8 @@ TEXTS = {
         'auth_invalid': "Google login invalid: {error}",
         'login_invalid': "WebUntis login failed: {error}",
         'crash_notice': "The sync program keeps crashing ({reason}). Please check the log: docker compose logs untis-sync",
+        'recovered_title': "Sync works again",
+        'recovered': "The sync works again. It was interrupted since {since}.",
     },
 
     'de': {
@@ -131,6 +133,8 @@ TEXTS = {
         'auth_invalid': "Google-Anmeldung ungültig: {error}",
         'login_invalid': "WebUntis-Anmeldung fehlgeschlagen: {error}",
         'crash_notice': "Das Sync-Programm bricht wiederholt ab ({reason}). Bitte das Log prüfen: docker compose logs untis-sync",
+        'recovered_title': "Sync läuft wieder",
+        'recovered': "Der Sync läuft wieder. Er war unterbrochen seit {since}.",
     },
 }
 

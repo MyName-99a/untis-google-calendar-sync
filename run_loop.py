@@ -257,7 +257,7 @@ def notify_crash(reason):
     try:
         import notifications
         from texts import t
-        notifications.send_error_notification(t('crash_notice', reason=reason))
+        notifications.report_error('crash', t('crash_notice', reason=reason), every_hours=0)   # the loop throttles itself
     except Exception as e:
         logging.warning(f"Crash notification could not be sent: {e}")
 

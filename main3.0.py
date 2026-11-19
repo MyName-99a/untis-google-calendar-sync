@@ -27,8 +27,9 @@ HASH_FILE = config.HASH_FILE
 LOG_FILE = os.path.join(DATA_DIR, 'sync_log.txt')
 
 # Marker file, so that the "Google login invalid" message does not come every few minutes
-AUTH_ERROR_MARKER = os.path.join(DATA_DIR, '.google_auth_error_gemeldet')
-UNTIS_ERROR_MARKER = os.path.join(DATA_DIR, '.untis_login_error_reported')
+# Error messages (notifications.report_error): repeated at most this often while the same error lasts
+REPEAT_HOURS_LOGIN = 24    # Google or WebUntis login: the person has to act, once a day is enough
+REPEAT_HOURS_SYNC = 6      # all other errors (e.g. WebUntis or Google not reachable)
 
 # Google Calendar colors (colorId)
 COLOR_NORMAL = '1'    # Lavender (as before)
@@ -148,28 +149,10 @@ def get_google_service():
     # The login comes from token.json (created with auth.py), details are in auth.py
     creds = auth.get_credentials()
 
-    # Login works (again): reset the marker for the error message
-    if os.path.exists(AUTH_ERROR_MARKER):
-        os.remove(AUTH_ERROR_MARKER)
+    # Login works (again): the next login error is reported at once
+    notifications.clear_error('google')
 
     return build('calendar', 'v3', credentials=creds, cache_discovery=False)
-
-
-def notify_error_once(marker, text, every_hours=24):
-    # sends the message at most once a day, until the login works again
-    try:
-        if os.path.exists(marker):
-            if time.time() - os.path.getmtime(marker) < every_hours * 3600:
-                return
-        notifications.send_error_notification(text)
-        with open(marker, 'w') as f:
-            f.write(datetime.now().isoformat())
-    except Exception as e:
-        logging.warning(f"Notification could not be sent: {e}")
-
-
-def notify_auth_error_once(message, every_hours=24):
-    notify_error_once(AUTH_ERROR_MARKER, t('auth_invalid', error=message), every_hours)
 
 
 def http_status(error):
@@ -392,9 +375,8 @@ def sync():
         logging.info(f"Fetching data for {start_date} to {end_date}")
         week_data = untis_api.get_week_data_from_api(start_date.isoformat(), end_date.isoformat())
 
-        # WebUntis login works (again): reset the marker for the error message
-        if os.path.exists(UNTIS_ERROR_MARKER):
-            os.remove(UNTIS_ERROR_MARKER)
+        # WebUntis login works (again): the next login error is reported at once
+        notifications.clear_error('login')
 
         for day in week_data:
             untis_date = day['date']  # Format: YYYYMMDD
@@ -632,6 +614,7 @@ def sync():
 
         save_hashes(new_hashes)
         counts = {'new': c_new, 'updated': c_upd, 'skipped': c_skip, 'deleted': c_del, 'silent': c_silent}
+        notifications.send_recovery()    # only if an error message was sent before
         notifications.send_update_notification(counts, change_log)
         logging.info(f"Done! New: {c_new}, updated: {c_upd}, unchanged: {c_skip}, deleted: {c_del}, silently updated: {c_silent}")
         log_separator()
@@ -639,19 +622,19 @@ def sync():
 
     except auth.GoogleAuthError as e:
         logging.error(f"Google login: {e}")
-        notify_auth_error_once(str(e))
+        notifications.report_error('google', t('auth_invalid', error=str(e)), every_hours=REPEAT_HOURS_LOGIN)
         log_separator()
         return False
 
     except untis_api.UntisLoginError as e:
         logging.error(f"WebUntis login: {e}")
-        notify_error_once(UNTIS_ERROR_MARKER, t('login_invalid', error=str(e)))
+        notifications.report_error('login', t('login_invalid', error=str(e)), every_hours=REPEAT_HOURS_LOGIN)
         log_separator()
         return False
 
     except Exception as e:
         logging.error(f"Error in sync: {e}", exc_info=True)
-        notifications.send_error_notification(t('sync_error', error=str(e)))
+        notifications.report_error('sync', t('sync_error', error=str(e)), every_hours=REPEAT_HOURS_SYNC)
         log_separator()
         return False
 

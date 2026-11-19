@@ -1,8 +1,10 @@
 import base64
+import json
 import logging
+import os
 import sys
 import time
-from datetime import date
+from datetime import date, datetime
 from itertools import groupby
 
 import requests
@@ -50,9 +52,10 @@ def _header(value):
 
 
 def send_push(message, title="Untis Sync", priority="default"):
+    """Sends a message to ntfy. Returns True if it was sent."""
     if not NTFY_URL:
         logging.warning("NTFY_TOPIC is not set, the notification is not sent.")
-        return
+        return False
     try:
         r = requests.post(
             NTFY_URL,
@@ -64,8 +67,10 @@ def send_push(message, title="Untis Sync", priority="default"):
             timeout=10
         )
         r.raise_for_status()
+        return True
     except Exception as e:
         logging.error(f"Push error: {e}")
+        return False
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -225,6 +230,83 @@ def send_update_notification(counts, change_log):
 
 def send_error_notification(error):
     send_push(error, title=t('error_title'))
+
+
+# ----------------------------------------------------------------------------------------------------
+# Error messages: every kind of error is reported once and then at most every few hours. When the sync
+# works again, one "works again" message follows (only if an error message was sent before).
+#
+# What is remembered lives in DATA_DIR/.error_state.json:
+#   last   kind of error -> time of its last message ('google', 'login', 'sync', 'crash')
+#   since  time of the first error message of the current disruption (None = no disruption)
+# ----------------------------------------------------------------------------------------------------
+
+ERROR_STATE_FILE = os.path.join(config.DATA_DIR, ".error_state.json")
+
+
+def _load_error_state():
+    try:
+        with open(ERROR_STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("last"), dict):
+            return {"last": data["last"], "since": data.get("since")}
+    except (OSError, ValueError):
+        pass
+    return {"last": {}, "since": None}
+
+
+def _save_error_state(state):
+    try:
+        temp = ERROR_STATE_FILE + ".tmp"
+        with open(temp, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        os.replace(temp, ERROR_STATE_FILE)
+    except OSError as e:
+        logging.warning(f"Could not write {ERROR_STATE_FILE}: {e}")
+
+
+def report_error(kind, message, every_hours=24):
+    """
+    Sends an error message, but not again for the same kind of error within every_hours hours
+    (0 = always). Returns True if a message was sent.
+    """
+    state = _load_error_state()
+    last = state["last"].get(kind)
+    if every_hours and last and time.time() - last < every_hours * 3600:
+        return False
+    if not send_push(message, title=t('error_title')):
+        return False                     # not sent: not remembered, the next run tries again
+    now = time.time()
+    state["last"][kind] = now
+    if not state.get("since"):
+        state["since"] = now
+    _save_error_state(state)
+    return True
+
+
+def clear_error(kind):
+    """This kind of error is gone (e.g. the Google login works again): a new one is reported at once."""
+    state = _load_error_state()
+    if kind in state["last"]:
+        del state["last"][kind]
+        _save_error_state(state)
+
+
+def _format_since(timestamp):
+    moment = datetime.fromtimestamp(timestamp)
+    clock = moment.strftime("%H:%M")
+    return clock if moment.date() == date.today() else f"{_format_day(moment.date().isoformat())} {clock}"
+
+
+def send_recovery():
+    """Call after a successful sync: sends the "works again" message if an error message was sent before."""
+    state = _load_error_state()
+    if not state.get("since"):
+        return False
+    if not send_push(t('recovered', since=_format_since(state["since"])), title=t('recovered_title')):
+        return False                     # the next successful sync tries again
+    _save_error_state({"last": {}, "since": None})
+    return True
 
 
 # ----------------------------------------------------------------------------------------------------
