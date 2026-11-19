@@ -1,15 +1,15 @@
-name: Docker-Image bauen
+name: Build Docker image
 
 on:
   push:
-    tags: ["v*"]            # v1.0.0 veröffentlicht das Image mit den Tags 1.0.0, 1.0 und latest
-  pull_request:             # nur bauen und testen, nichts veröffentlichen
+    tags: ["v*"]            # v1.0.0 publishes the image with the tags 1.0.0, 1.0 and latest
+  pull_request:             # only build and test, publish nothing
     paths:
       - Dockerfile
       - requirements.txt
       - "*.py"
       - .github/workflows/docker.yml
-  workflow_dispatch:        # manuell starten (veröffentlicht ein Image mit dem Branch-Namen als Tag)
+  workflow_dispatch:        # start manually (publishes an image with the branch name as tag)
 
 env:
   IMAGE: ghcr.io/myname-99a/untis-google-calendar-sync
@@ -27,8 +27,8 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # Schnelltest: Image für amd64 bauen, Python-Dateien prüfen und den Zeitplan anzeigen
-      - name: Schnelltest bauen
+      # Smoke test: build the image for amd64, check the Python files and show the schedule
+      - name: Build smoke test image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -37,7 +37,7 @@ jobs:
           tags: untis-sync:test
           cache-from: type=gha
 
-      - name: Schnelltest ausführen
+      - name: Run smoke test
         run: |
           docker run --rm \
             -e UNTIS_SERVER=example.webuntis.com -e UNTIS_USER=test -e UNTIS_PASSWORD=test \
@@ -45,11 +45,14 @@ jobs:
               ! grep -rn 000_Archive /app &&
               python -c 'import auth; assert auth.TOKEN_PATH == \"/data/token.json\", auth.TOKEN_PATH' &&
               python -m py_compile main3.0.py get_week_and_lesson_information.py &&
-              python -c 'import config, auth, changes, notifications' &&
+              python -c 'import config, texts, auth, changes, notifications' &&
+              python texts.py &&
               python changes.py > /dev/null &&
-              python run_loop.py --plan > /dev/null"
+              python run_loop.py --plan > /dev/null &&
+              SYNC_TIMES=21:00,21:30 SYNC_WINDOW=06:00-20:59 python run_loop.py --plan > /dev/null &&
+              SYNC_INTERVAL_MINUTES=0 python run_loop.py --plan > /dev/null"
 
-      - name: Bei GitHub-Container-Registry anmelden
+      - name: Log in to the GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
@@ -57,7 +60,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tags und Labels festlegen
+      - name: Set tags and labels
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -69,7 +72,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
 
-      - name: Bauen (amd64 + arm64) und veröffentlichen
+      - name: Build (amd64 + arm64) and publish
         uses: docker/build-push-action@v7
         with:
           context: .
