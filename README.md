@@ -176,6 +176,10 @@ Install the ntfy app, subscribe to a hard-to-guess topic name and put it into `N
 that contains changes, with a line per change (`+` added, `−` removed, `~` changed). Important changes
 (cancellations, exams, room, teacher, homework) have high priority.
 
+You also get a message when something goes wrong, for example when WebUntis or Google cannot be reached or a login is
+rejected. The same kind of error is reported once and then at most every 6 hours (login problems: once a day), so a long
+disruption does not fill your phone. When the sync works again, one more message tells you so and since when it was interrupted.
+
 ## Clean up and uninstall
 
 `cleanup.py` removes the events the sync created, for example to start over, to remove duplicates, or when you do not want to use
