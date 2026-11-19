@@ -1,44 +1,179 @@
 # untis-google-calendar-sync
-A short program, that takes your WebUntis timetable into your google calender.
 
-## 1. Clone repository
+Syncs your **WebUntis** timetable to **Google Calendar** and keeps it up to date.
+Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, ...).
+
+**What you get**
+
+- Every lesson as a calendar event with room, teacher(s), homework, teaching content and notes
+- Cancelled lessons are marked (grey, struck through), exams are red and get their own section
+- Changes (room, teacher, substitution, homework, ...) update the event automatically
+- Optional push notifications via [ntfy](https://ntfy.sh) that show **exactly what changed**:
+
+  ```
+  Fri 13.11. 08:00 · English (E L2)
+    + Ausfall eingetragen
+    ~ Raum: A101 → B202
+    + Hausaufgabe: Finish exercise 3
+  ```
+
+- Configurable schedule (every X minutes inside a time window, or at fixed times), healthcheck, custom subject names
+
+> Unofficial project, not affiliated with Untis GmbH or Google. It logs in to WebUntis like your browser does.
+> Use it at your own risk, check your school's rules, and keep the interval polite
+> (every run asks WebUntis for every lesson of the coming weeks, so 15 minutes or more is recommended).
+
+## Requirements
+
+- Docker with Docker Compose (v2)
+- A WebUntis account that logs in with **username and password**.
+  Schools that use single sign-on (e.g. Microsoft or IServ login) are **not supported**
+- A Google account and a free Google Cloud project (one-time setup below)
+
+## Quick start
+
+### 1. Google Cloud (one time, about 10 minutes)
+
+You need your **own** Google Cloud project. The calendar permission is a "sensitive scope", so a shared project
+would be limited and unverified. With your own project nobody else is involved.
+
+1. Open <https://console.cloud.google.com> and create a project. Select it.
+2. Search for **Google Calendar API** and **enable** it.
+3. Open the **OAuth consent screen** (Google Auth Platform). Choose user type **External**, enter an app name and your email.
+4. **Publish the app** (status **"In production"**, under *Audience*). Do this **before** signing in:
+   in "Testing" status Google invalidates the login after 7 days. You can skip any verification request,
+   it is not needed for personal use.
+5. Create an **OAuth client** (Credentials / Clients). The application type must be
+   **"TVs and Limited Input devices"** (not "Desktop app"). Copy the **Client ID** and the **Client secret** right away,
+   Google may not show the secret again later.
+
+### 2. Set up the folder
+
+```bash
+mkdir untis-sync && cd untis-sync
+curl -fsSLO https://raw.githubusercontent.com/MyName-99a/untis-google-calendar-sync/main/compose.yaml
+curl -fsSL https://raw.githubusercontent.com/MyName-99a/untis-google-calendar-sync/main/.env.example -o .env
+mkdir data
+```
+
+Create the `data` folder yourself. If Docker creates it, it belongs to root and the container cannot write to it.
+
+Edit `.env` and fill in at least `UNTIS_SERVER`, `UNTIS_USER`, `UNTIS_PASSWORD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+and `TZ`. On Linux set `PUID` and `PGID` to the output of `id -u` and `id -g`.
+
+**Tip:** Try it with a separate test calendar first. Create one in Google Calendar and put its ID into `CALENDAR_ID`.
+
+### 3. Sign in to Google (once)
+
+```bash
+docker compose run --rm untis-sync python auth.py
+```
+
+The program shows a code. Open <https://www.google.com/device> on any device (your phone is fine), enter the code,
+sign in with the Google account that owns the calendar and confirm.
+
+**You will see the warning "Google hasn't verified this app". That is normal and expected** for your own project:
+click *Advanced*, then *Continue*. You are the developer and the only user.
+
+The login is stored in `data/token.json` and renews itself automatically.
+
+### 4. Start
+
+```bash
+docker compose up -d
+docker compose logs -f untis-sync
+```
+
+The first run creates all events and takes a few minutes. After about 90 seconds `docker compose ps` shows `healthy`.
+
+## Configuration
+
+All settings are environment variables in `.env`.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `UNTIS_SERVER` | | School address, e.g. `your-school.webuntis.com` |
+| `UNTIS_USER`, `UNTIS_PASSWORD` | | WebUntis login |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | OAuth client of type "TVs and Limited Input devices" |
+| `CALENDAR_ID` | `primary` | Target calendar (`primary` = main calendar) |
+| `TZ` | `Europe/Berlin` | Time zone of the school. Used for the schedule, logs and calendar events |
+| `SYNC_WEEKS_AHEAD` | `12` | Weeks to sync in advance |
+| `SYNC_INTERVAL_MINUTES` | `5` | Minutes between two runs (counted from the start of the last run) |
+| `SYNC_WINDOW` | | Only run in this window, e.g. `06:00-19:00` (empty = all day) |
+| `SYNC_TIMES` | | Only run at these times, e.g. `06:30,12:00,17:30`. Overrides interval and window |
+| `SYNC_DAYS` | `1-7` | Weekdays, `1` = Monday ... `7` = Sunday, e.g. `1-5` or `1,3,5` |
+| `SYNC_RUN_ON_START` | `true` | Run once immediately when the container starts |
+| `SYNC_TIMEOUT_MINUTES` | `15` | A hanging run is stopped after this time |
+| `NTFY_TOPIC` | | ntfy topic for notifications (empty = none) |
+| `NTFY_SERVER` | `https://ntfy.sh` | Use your own ntfy server if you have one |
+| `FACH_MAP_USE_DEFAULTS` | `true` | `false` = use only your own `fach_map.json` |
+| `PUID`, `PGID` | `1000` | Owner of the files in `./data` |
+
+Check your schedule without starting anything:
+
+```bash
+docker compose run --rm untis-sync python run_loop.py --plan
+```
+
+### Subject names
+
+WebUntis delivers short codes (`M`, `E-LK`, ...). The built-in table maps them to German names for one school. To use your own,
+copy `fach_map.example.json` to `data/fach_map.json` and edit it. The key is the beginning of the code, your entries win,
+and longer codes should be listed before shorter ones.
+If your school shows more than three position columns (room, teacher, subject, ...) in the timetable, the code that reads
+them (`process_positions` in `get_week_and_lesson_information.py`) needs to be extended.
+
+### Notifications
+
+Install the ntfy app, subscribe to a hard-to-guess topic name and put it into `NTFY_TOPIC`. You get one message per run
+that contains changes, with a line per change (`+` added, `−` removed, `~` changed). Important changes
+(cancellations, exams, room, teacher, homework) have high priority.
+
+## Update
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Releases are tagged (`1.0.0`, `1.0`, `latest`). Replace `latest` in `compose.yaml` with a version to pin it.
+
+## Build it yourself / without Docker
+
 ```bash
 git clone https://github.com/MyName-99a/untis-google-calendar-sync.git
+cd untis-google-calendar-sync
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-## 2. Install dependencies and chromium
-First install the requirements and then use the command to install chromium
+Without Docker (Python 3.10+):
+
 ```bash
+python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
-
-playwright install chromium
+playwright install --with-deps chromium    # installs a browser, --with-deps needs sudo on Linux
+cp .env.example .env                       # and fill it in
+python auth.py                             # sign in to Google once
+python run_loop.py
 ```
 
-## 3. Configuration for your WebUntis account
-#### 1. WebUntis Login: Create a ```login.py``` file and fill it out (See login_example.py as example).
+## Troubleshooting
 
-## 4. Create a google project to access its API
-#### 1. Go to https://console.cloud.google.com/ and create a new Project. Select it.
-#### 2. Search at the top for ```Google Calendar API```. Activate it.
-#### 3. Go to the ```OAuth consent screen```. Follow the ```First Steps``` there. Choose your Project name, set the mark on external, choose an E-Mail for contacts and accept.
-#### 4. Go again (if you left the site) to the ```OAuth consent screen``` and create a ```OAuth client ID```. Choose ```Desktop App``` and the name of the project. Create. Here, download the JSON file and name it ```credentials.json```. Add it to your project folder.
-#### 5. When you now start the ```main3.0.py``` you'll be greeted with a Google login site. Use the account you want the calendar to be in. A ```toke.json``` should've been created.
-#### 6. Now after 7 days the test phase of your project should be expired. To prevent this publish it now: Go to the ```OAuth consent screen``` and publish the app/project there. If you are being asked to check your project, select no.
-#### 7. The script is now read to run. (Maybe run your program again to create a new ```toke.json``` after you set the project to public).
+| Problem | Solution |
+|---|---|
+| "Google hasn't verified this app" | Normal. Click *Advanced*, then *Continue* |
+| Login stops working after 7 days | The consent screen was still in "Testing". Publish it ("In production"), then run `python auth.py --force` again |
+| ntfy message "Google-Anmeldung ungültig" | Access was revoked or expired. Run `docker compose run --rm untis-sync python auth.py --force` |
+| `invalid_client` during sign-in | Wrong client ID, or the client is not of type "TVs and Limited Input devices" |
+| `Permission denied` in `/data` | Create `data` yourself and set `PUID`/`PGID` to your `id -u` / `id -g` |
+| WebUntis password contains `$` | Put it in single quotes in `.env`: `UNTIS_PASSWORD='...'` |
+| Container is `unhealthy` | Three runs in a row failed, or the loop is stuck. See `docker compose logs --tail 100 untis-sync` and `data/sync_log.txt` |
+| Login to WebUntis fails | Check server, user and password. Single sign-on schools are not supported |
+| Wrong or missing subject names | Add them to `data/fach_map.json` |
 
-## 5. For automation
-I use Cron on Ubuntu to run it every few minutes:
+## Notes
 
-```bash 
-# It would run every 4min between 6 and 19 o'clock
-*/4 6-19 * * * /path/to/your/venv/bin/python3 /path/to/main3.0.py
-```
-
-## Info
-- When you dont see the publish button. Wait till the 7 days run out and the program runs into a error. Then it should pop-up.
-
-- If you are on NixOs, start by executing "nix-shell", and then follow the Setup-Guide as usual.
-
-- Maybe you need to update the 'FACH_MAP' to get the real name of the subjects at your school. Maybe update or extend the 'positions' if your school uses more than 3.
-
-- The Program needs roughly 3½ minutes to check every lesson in 12 weeks time for changes.
+- Your credentials stay on your machine. The program only talks to WebUntis, Google and (optionally) ntfy.
+- The Google permission is the full calendar scope (read and write all calendars of the account), because the program creates
+  and updates events. Keep `data/token.json` and `.env` private, and consider using a dedicated calendar via `CALENDAR_ID`.
+- A full run takes a few minutes, because details (homework, teaching content, exams) are fetched per lesson.

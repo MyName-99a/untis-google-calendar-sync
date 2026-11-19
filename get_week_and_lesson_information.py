@@ -1,4 +1,4 @@
-import login
+import config
 import requests
 from pprint import pprint
 from datetime import datetime, timedelta
@@ -12,9 +12,10 @@ today = datetime.today().strftime('%Y-%m-%d')
 current_week_monday = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime('%Y-%m-%d')
 current_week_friday = (datetime.now() - timedelta(days=datetime.now().weekday()) + timedelta(days=4)).strftime('%Y-%m-%d')
 
-base_url = login.server
-username = login.user
-password = login.password
+base_url = config.UNTIS_SERVER
+username = config.UNTIS_USER
+password = config.UNTIS_PASSWORD
+config.require("UNTIS_SERVER", "UNTIS_USER", "UNTIS_PASSWORD")
 
 #
 # ----------------------------------------------------------------------------------------------------
@@ -58,7 +59,9 @@ def get_cookies_and_bearer_token():
             sleek_session1, sleek_product1, bearer_token1
         )
 schoolname, tenant_id, traceid, jsessionid, sleek_session, sleek_product, bearer_token = get_cookies_and_bearer_token()
-tenant_id_splited = tenant_id[0].replace('"', '') if tenant_id else "" # Ohne "", weil man die bei den api dingern unten ohne benutzt in den 'headers'
+# Ohne "", weil man die bei den api dingern unten ohne benutzt in den 'headers'
+# (vorher stand hier tenant_id[0], das war nur das erste Zeichen und damit immer leer)
+tenant_id_splited = tenant_id.replace('"', '') if tenant_id else ""
 
 #
 # ----------------------------------------------------------------------------------------------------
@@ -260,7 +263,15 @@ def get_week_data_from_api(start_date_of_week_iso, end_date_of_week_iso):
 # ----------------------------------------------------------------------------------------------------
 #
 
-def get_homework_information(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
+def get_lesson_detail(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
+    """
+    Holt die Detailansicht einer Stunde (ein Request) und gibt zurück:
+    {
+        "homeworks": [(text, dateTime, dueDateTime), ...],
+        "teaching_content": str oder None,
+        "exam": {"name": ..., "description": ..., "type_long_name": ...} oder None
+    }
+    """
     cookies = {
         'schoolname': f'{schoolname}',
         'Tenant-Id': f'{tenant_id}',
@@ -302,7 +313,7 @@ def get_homework_information(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
         headers=headers,
     )
 
-    all_homeworks = []
+    result = {"homeworks": [], "teaching_content": None, "exam": None}
 
     try:
         data = response.json()
@@ -310,23 +321,41 @@ def get_homework_information(id_der_stunde, start_zeit_in_iso, end_zeit_in_iso):
         entries = data.get('calendarEntries', [])
 
         if entries and len(entries) > 0:
-            # Sicherstellen, dass homeworks existiert (kann None sein, wenn keine HA da sind)
-            homeworks_list = entries[0].get('homeworks')
+            entry = entries[0]
 
+            # 1. Hausaufgaben (kann None sein, wenn keine HA da sind)
+            homeworks_list = entry.get('homeworks')
             if homeworks_list:
                 for hw in homeworks_list:
                     text_from_hw = hw.get('text', 'Kein Text vorhanden')
                     date_time_from_hw = hw.get('dateTime')
                     due_date_time_from_hw = hw.get('dueDateTime')
 
-                    all_homeworks.append((text_from_hw, date_time_from_hw, due_date_time_from_hw))
+                    result["homeworks"].append((text_from_hw, date_time_from_hw, due_date_time_from_hw))
+
+            # 2. Lehrstoff (teachingContent), leer oder fehlend -> None
+            teaching_content = entry.get('teachingContent')
+            if teaching_content and str(teaching_content).strip():
+                result["teaching_content"] = str(teaching_content).strip()
+
+            # 3. Exam (kann None sein oder fehlen)
+            exam = entry.get('exam')
+            if exam:
+                exam_data = {
+                    "name": exam.get('name'),
+                    "description": exam.get('description'),
+                    "type_long_name": exam.get('typeLongName'),
+                }
+                # nur übernehmen, wenn wirklich irgendein Text drinsteht
+                if any(v and str(v).strip() for v in exam_data.values()):
+                    result["exam"] = exam_data
 
     except Exception as e:
         # Falls das JSON-Parsing fehlschlägt oder die Struktur völlig anders ist
-        print(f"Fehler beim Parsen der Hausaufgaben für ID {id_der_stunde}: {e}")
-        return []
+        print(f"Fehler beim Parsen der Detaildaten für ID {id_der_stunde}: {e}")
+        return {"homeworks": [], "teaching_content": None, "exam": None}
 
-    return all_homeworks
+    return result
 
 #
 # ----------------------------------------------------------------------------------------------------
