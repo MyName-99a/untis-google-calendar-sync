@@ -129,12 +129,11 @@ UNTIS_SERVER = _clean_server(_get("UNTIS_SERVER"))
 UNTIS_USER = _get("UNTIS_USER")
 UNTIS_PASSWORD = os.environ.get("UNTIS_PASSWORD", "")  # deliberately not stripped, passwords may contain spaces
 
-# How the program logs in (untis_login.py): "http" = plain HTTP requests (default, fast, no browser needed),
-# "browser" = headless Chromium via Playwright (fallback, if "http" does not work for your school)
-UNTIS_LOGIN = _get("UNTIS_LOGIN", "http").lower()
-if UNTIS_LOGIN not in ("http", "browser"):
-    _warn(f"UNTIS_LOGIN={UNTIS_LOGIN!r} is not supported (use http or browser), using 'http'.")
-    UNTIS_LOGIN = "http"
+# The browser login (UNTIS_LOGIN=browser) was removed in version 1.4.0, the image no longer contains a browser.
+# The images 1.3.x still have it (ghcr.io/myname-99a/untis-google-calendar-sync:1.3).
+if _get("UNTIS_LOGIN", "http").lower() != "http":
+    _warn("UNTIS_LOGIN=browser is no longer supported since version 1.4.0, the HTTP login is used. "
+          "The image tag 1.3 still has the browser login.")
 
 # Login name of the school. Only needed if the program cannot find it itself (the error message says so).
 UNTIS_SCHOOL = _get("UNTIS_SCHOOL")

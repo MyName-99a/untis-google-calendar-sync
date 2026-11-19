@@ -46,6 +46,8 @@ jobs:
               python -c 'import auth; assert auth.TOKEN_PATH == \"/data/token.json\", auth.TOKEN_PATH' &&
               python -m py_compile main3.0.py untis_login.py get_week_and_lesson_information.py cleanup.py &&
               python -c 'import config, texts, auth, changes, notifications, untis_login' &&
+              python -c 'import time; time.tzset(); assert time.strftime(\"%Z\") in (\"CET\", \"CEST\"), time.strftime(\"%Z\")' &&
+              ! python -c 'import playwright' 2>/dev/null &&
               python texts.py &&
               python changes.py > /dev/null &&
               python cleanup.py --help > /dev/null &&

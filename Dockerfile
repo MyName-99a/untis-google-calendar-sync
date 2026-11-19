@@ -1,6 +1,5 @@
-# The version must match "playwright==..." in requirements.txt.
-# The Playwright image contains Python, Chromium and all system packages (amd64 and arm64).
-FROM mcr.microsoft.com/playwright/python:v1.65.2-noble
+# Small image: Python and the packages from requirements.txt (amd64 and arm64), no browser.
+FROM python:3.12-slim
 
 LABEL org.opencontainers.image.source="https://github.com/MyName-99a/untis-google-calendar-sync" \
       org.opencontainers.image.description="Syncs the WebUntis timetable to Google Calendar"
@@ -10,6 +9,11 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     DATA_DIR=/data \
     TZ=Europe/Berlin
+
+# tzdata: the system time zones, so that TZ (also changed in .env) is applied to the log and the sync
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
