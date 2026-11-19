@@ -144,18 +144,22 @@ GOOGLE_CLIENT_SECRET = _get("GOOGLE_CLIENT_SECRET")
 # ----------------------------------------------------------------------------------------------------
 # Schedule (evaluated by run_loop.py)
 #
-#   SYNC_INTERVAL_MINUTES  time between two runs (counted from the start of the last run)
-#   SYNC_WINDOW            only run inside this window, e.g. 06:00-19:00 (empty = all day)
-#   SYNC_TIMES             only run at fixed times, e.g. 06:30,12:00,17:30 (takes priority, interval and
-#                          window are ignored then)
-#   SYNC_DAYS              weekdays, 1 = Monday ... 7 = Sunday, e.g. 1-5 or 1,3,5
+#   SYNC_INTERVAL_MINUTES  time between two runs (counted from the start of the last run), 0 = no interval.
+#                          Default: 5, but 0 if SYNC_TIMES is set (so SYNC_TIMES alone means "only at these times")
+#   SYNC_WINDOW            the interval runs only inside this window, e.g. 06:00-19:00 (empty = all day)
+#   SYNC_TIMES             additional runs at fixed times, e.g. 21:00,21:30,22:00. They run even outside the
+#                          window and can be combined with the interval
+#   SYNC_DAYS              weekdays for interval and fixed times, 1 = Monday ... 7 = Sunday, e.g. 1-5 or 1,3,5
 #   SYNC_RUN_ON_START      run once immediately when the container starts
 #   SYNC_TIMEOUT_MINUTES   a hanging run is stopped after this time
+#
+# Without interval and without fixed times nothing runs automatically (only on start, if SYNC_RUN_ON_START
+# is true). A single manual run: python run_loop.py --once
 # ----------------------------------------------------------------------------------------------------
 
-SYNC_INTERVAL_MINUTES = _get_int("SYNC_INTERVAL_MINUTES", 5, minimum=1, maximum=1440)
 SYNC_WINDOW = _get("SYNC_WINDOW")
 SYNC_TIMES = _get("SYNC_TIMES")
+SYNC_INTERVAL_MINUTES = _get_int("SYNC_INTERVAL_MINUTES", 0 if SYNC_TIMES else 5, minimum=0, maximum=1440)
 SYNC_DAYS = _get("SYNC_DAYS", "1-7")
 SYNC_RUN_ON_START = _get_bool("SYNC_RUN_ON_START", True)
 SYNC_TIMEOUT_MINUTES = _get_int("SYNC_TIMEOUT_MINUTES", 15, minimum=1, maximum=240)

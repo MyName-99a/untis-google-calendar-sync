@@ -18,7 +18,7 @@ Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, .
   ```
 
 - Calendar and notification texts in English or German (`LANGUAGE=en|de`)
-- Configurable schedule (every X minutes inside a time window, or at fixed times), healthcheck, custom subject names
+- Configurable schedule (every X minutes inside a time window and/or at fixed times), healthcheck, custom subject names
 
 > Unofficial project, not affiliated with Untis GmbH or Google. It logs in to WebUntis like your browser does.
 > Use it at your own risk, check your school's rules, and keep the interval polite
@@ -105,10 +105,10 @@ All settings are environment variables in `.env`.
 | `LANGUAGE` | `en` | Language of the calendar events and push notifications: `en` or `de`. Logs are always English |
 | `TZ` | `Europe/Berlin` | Time zone of the school. Used for the schedule, logs and calendar events |
 | `SYNC_WEEKS_AHEAD` | `12` | Weeks to sync in advance |
-| `SYNC_INTERVAL_MINUTES` | `5` | Minutes between two runs (counted from the start of the last run) |
-| `SYNC_WINDOW` | | Only run in this window, e.g. `06:00-19:00` (empty = all day) |
-| `SYNC_TIMES` | | Only run at these times, e.g. `06:30,12:00,17:30`. Overrides interval and window |
-| `SYNC_DAYS` | `1-7` | Weekdays, `1` = Monday ... `7` = Sunday, e.g. `1-5` or `1,3,5` |
+| `SYNC_INTERVAL_MINUTES` | `5` (`0` if `SYNC_TIMES` is set) | Minutes between two runs (counted from the start of the last run), `0` = no interval |
+| `SYNC_WINDOW` | | The interval runs only in this window, e.g. `06:00-19:00` (empty = all day) |
+| `SYNC_TIMES` | | Additional runs at fixed times, e.g. `21:00,21:30,22:00`. They also run outside the window |
+| `SYNC_DAYS` | `1-7` | Weekdays for interval and fixed times, `1` = Monday ... `7` = Sunday, e.g. `1-5` or `1,3,5` |
 | `SYNC_RUN_ON_START` | `true` | Run once immediately when the container starts |
 | `SYNC_TIMEOUT_MINUTES` | `15` | A hanging run is stopped after this time |
 | `NTFY_TOPIC` | | ntfy topic for notifications (empty = none) |
@@ -117,10 +117,29 @@ All settings are environment variables in `.env`.
 | `FACH_MAP_USE_DEFAULTS` | `true` | `false` = use only your own `fach_map.json`. **Set it to `false` if your school is not the German school the built-in table was made for** (see [Subject names](#subject-names)) |
 | `PUID`, `PGID` | `1000` | Owner of the files in `./data` |
 
-Check your schedule without starting anything:
+### Schedule
+
+You can use an interval, fixed times, or both:
+
+| You want | Settings in `.env` |
+|---|---|
+| Every 5 minutes, all day | nothing (default) |
+| Every 5 minutes between 06:00 and 19:00 on weekdays | `SYNC_INTERVAL_MINUTES=5`, `SYNC_WINDOW=06:00-19:00`, `SYNC_DAYS=1-5` |
+| Only at fixed times | `SYNC_TIMES=06:30,12:00,17:30` |
+| Interval during the day **and** a few runs in the evening | `SYNC_INTERVAL_MINUTES=4`, `SYNC_WINDOW=06:00-20:59`, `SYNC_TIMES=21:00,21:30,22:00,22:30` |
+| Nothing automatic, only when you start it | `SYNC_INTERVAL_MINUTES=0` (and no `SYNC_TIMES`) |
+
+The window only applies to the interval, fixed times run at their time. If nothing is scheduled the container syncs once on start
+(`SYNC_RUN_ON_START`) and then waits. Check your schedule without starting anything:
 
 ```bash
 docker compose run --rm untis-sync python run_loop.py --plan
+```
+
+Run one sync right now (independent of the schedule), for example for testing:
+
+```bash
+docker compose run --rm untis-sync python run_loop.py --once
 ```
 
 ### Subject names

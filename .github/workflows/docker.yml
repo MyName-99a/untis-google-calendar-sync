@@ -48,7 +48,9 @@ jobs:
               python -c 'import config, texts, auth, changes, notifications' &&
               python texts.py &&
               python changes.py > /dev/null &&
-              python run_loop.py --plan > /dev/null"
+              python run_loop.py --plan > /dev/null &&
+              SYNC_TIMES=21:00,21:30 SYNC_WINDOW=06:00-20:59 python run_loop.py --plan > /dev/null &&
+              SYNC_INTERVAL_MINUTES=0 python run_loop.py --plan > /dev/null"
 
       - name: Log in to the GitHub Container Registry
         if: github.event_name != 'pull_request'

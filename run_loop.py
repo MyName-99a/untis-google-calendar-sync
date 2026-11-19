@@ -2,8 +2,12 @@
 Starts main3.0.py on a schedule (replaces cron) and tells the Docker healthcheck whether everything runs.
 
     python run_loop.py                 start the loop (this is what the container runs)
+    python run_loop.py --once          one sync right now, then exit (ignores the schedule)
     python run_loop.py --plan          shows the schedule and the next runs, starts nothing
     python run_loop.py --healthcheck   exit code 0 = healthy, 1 = unhealthy (for the Docker HEALTHCHECK)
+
+The schedule can combine an interval (SYNC_INTERVAL_MINUTES, inside SYNC_WINDOW) and fixed times (SYNC_TIMES).
+Both are optional. With neither of them nothing runs automatically, use --once.
 
 Settings (see config.py): SYNC_INTERVAL_MINUTES, SYNC_WINDOW, SYNC_TIMES, SYNC_DAYS,
 SYNC_RUN_ON_START, SYNC_TIMEOUT_MINUTES, TZ.
@@ -109,21 +113,24 @@ class Schedule:
         self.days = parse_days(config.SYNC_DAYS)
         self.window = parse_window(config.SYNC_WINDOW)
         self.times = parse_times(config.SYNC_TIMES)
-        self.interval = timedelta(minutes=config.SYNC_INTERVAL_MINUTES)
+        self.interval = timedelta(minutes=config.SYNC_INTERVAL_MINUTES) if config.SYNC_INTERVAL_MINUTES > 0 else None
         if config.SYNC_TIMES and not self.times:
-            logging.warning("SYNC_TIMES contains no valid time, using the interval.")
+            logging.warning("SYNC_TIMES contains no valid time, ignoring it.")
+        if self.window and not self.interval:
+            logging.warning("SYNC_WINDOW has no effect without SYNC_INTERVAL_MINUTES (the window only applies to the interval).")
 
     def describe(self):
         days = ", ".join(DAY_NAMES[d] for d in sorted(self.days))
-        if self.times:
-            text = f"Fixed times {', '.join(t.strftime('%H:%M') for t in self.times)}"
-            if config.SYNC_WINDOW:
-                text += " (SYNC_WINDOW is ignored)"
-        else:
+        parts = []
+        if self.interval:
             window = (f"{self.window[0].strftime('%H:%M')}-{self.window[1].strftime('%H:%M')}"
                       if self.window else "all day")
-            text = f"Every {config.SYNC_INTERVAL_MINUTES} minutes, {window}"
-        return f"{text}, days: {days}, time zone: {config.TZ}"
+            parts.append(f"every {config.SYNC_INTERVAL_MINUTES} minutes, {window}")
+        if self.times:
+            parts.append(f"fixed times {', '.join(t.strftime('%H:%M') for t in self.times)}")
+        if not parts:
+            return "no automatic runs (use --once for a manual run)"
+        return f"{' + '.join(parts)}, days: {days}, time zone: {config.TZ}"
 
     def _next_allowed(self, moment):
         # earliest allowed time from 'moment' on (weekday and time window)
@@ -153,13 +160,22 @@ class Schedule:
         return after + timedelta(days=1)
 
     def first_run(self, now):
-        return self._next_time(now) if self.times else self._next_allowed(now)
+        candidates = []
+        if self.interval:
+            candidates.append(self._next_allowed(now))
+        if self.times:
+            candidates.append(self._next_time(now))
+        return min(candidates) if candidates else None
 
     def next_run(self, started, finished):
+        # the earlier of "next interval run" and "next fixed time", None if nothing is scheduled
+        candidates = []
+        if self.interval:
+            earliest = max(started + self.interval, finished + timedelta(seconds=MIN_PAUSE_SECONDS))
+            candidates.append(self._next_allowed(earliest))
         if self.times:
-            return self._next_time(finished)
-        earliest = max(started + self.interval, finished + timedelta(seconds=MIN_PAUSE_SECONDS))
-        return self._next_allowed(earliest)
+            candidates.append(self._next_time(finished))
+        return min(candidates) if candidates else None
 
 
 def fmt(moment):
@@ -282,9 +298,20 @@ def run_loop():
     logging.info(f"Schedule: {schedule.describe()}")
     now = datetime.now(tz)
     next_time = now if config.SYNC_RUN_ON_START else schedule.first_run(now)
+    idle_logged = False
     health(now)
 
     while not stop.is_set():
+        if next_time is None:
+            # nothing scheduled: stay alive (and healthy), a manual run is possible with --once
+            if not idle_logged:
+                logging.info("No automatic runs planned. Waiting (a manual run: python run_loop.py --once).")
+                idle_logged = True
+            health(datetime.now(tz) + timedelta(minutes=10))
+            if stop.wait(300):
+                break
+            continue
+
         wait_seconds = (next_time - datetime.now(tz)).total_seconds()
         if wait_seconds > 1:
             logging.info(f"Next run: {fmt(next_time)}")
@@ -318,7 +345,7 @@ def run_loop():
                     last_notice = time.time()
 
         next_time = schedule.next_run(started, finished)
-        health(next_time)
+        health(next_time or finished + timedelta(minutes=10))
 
     logging.info("Stopped.")
 
@@ -333,9 +360,36 @@ def show_plan(count=8):
 
     moment = now if config.SYNC_RUN_ON_START else schedule.first_run(now)
     for i in range(count):
+        if moment is None:
+            print("  (no further automatic runs, use --once for a manual run)")
+            break
         label = "  (on start, SYNC_RUN_ON_START)" if i == 0 and config.SYNC_RUN_ON_START else ""
         print(f"  {fmt(moment)}{label}")
         moment = schedule.next_run(moment, moment)
+
+
+def run_once():
+    """One sync right now, independent of the schedule. Returns the exit code of the sync (0 = success)."""
+    state = {"proc": None}
+
+    def handle_stop(signum, frame):
+        proc = state["proc"]
+        if proc is not None and proc.poll() is None:
+            _signal_process(proc, signal.SIGTERM)
+
+    signal.signal(signal.SIGTERM, handle_stop)
+    signal.signal(signal.SIGINT, handle_stop)
+
+    logging.info("Starting sync ...")
+    started = time.time()
+    code = run_sync(state, config.SYNC_TIMEOUT_MINUTES * 60)
+    duration = int(time.time() - started)
+    if code == 0:
+        logging.info(f"Sync successful ({duration} s).")
+        return 0
+    reason = "timeout" if code is None else f"exit code {code}"
+    logging.error(f"Sync failed ({reason}).")
+    return code if code and code > 0 else 1
 
 
 if __name__ == "__main__":
@@ -346,4 +400,6 @@ if __name__ == "__main__":
     if "--plan" in sys.argv:
         show_plan()
         sys.exit(0)
+    if "--once" in sys.argv:
+        sys.exit(run_once())
     run_loop()
