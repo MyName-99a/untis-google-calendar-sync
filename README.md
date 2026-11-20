@@ -1,5 +1,7 @@
 # untis-google-calendar-sync
 
+🇩🇪 [Deutsche Version](README.de.md)
+
 Syncs your **WebUntis** timetable to **Google Calendar** and keeps it up to date.
 Runs as a small Docker container on amd64 and arm64 (PC, server, Raspberry Pi, ...).
 
